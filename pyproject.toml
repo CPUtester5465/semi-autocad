@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semicad"
+version = "0.1.0"
+description = "Semi-automatic CAD with Claude Code"
+requires-python = ">=3.10"
+dependencies = [
+    "cadquery",
+    "click>=8.0",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+    "cq-editor",
+    "trimesh",
+    "pyglet<2",
+]
+warehouse = [
+    "cq-warehouse",
+]
+electronics = [
+    "cq-electronics",
+]
+partcad = [
+    "partcad",
+]
+all = [
+    "semicad[dev,warehouse,electronics,partcad]",
+]
+
+[project.scripts]
+semicad = "semicad.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["semicad*", "scripts*"]

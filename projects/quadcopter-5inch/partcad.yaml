@@ -1,0 +1,52 @@
+# Quadcopter 5-inch Freestyle Project
+# ====================================
+# A 220mm wheelbase FPV racing/freestyle quadcopter frame
+#
+# Design approach: Component-first
+# - Position components in 3D space
+# - Generate frame geometry around them
+# - Verify clearances
+
+name: quadcopter-5inch
+desc: 5-inch freestyle quadcopter frame (220mm wheelbase)
+version: "1.0.0"
+
+# Build configuration
+config:
+  wheelbase: 220        # mm, motor-to-motor diagonal
+  prop_size: 5.0        # inches
+  fc_mount: 30.5        # mm, FC/ESC stack mount pattern
+  motor_mount: 16.0     # mm, motor bolt pattern
+  arm_width: 12         # mm
+  arm_thickness: 4      # mm
+  material: "carbon_fiber_3k"
+
+# Components used (from semicad registry)
+components:
+  fc: fc_f405_30x30
+  esc: esc_45a_30x30
+  motors: motor_2207
+  props: prop_5inch
+  battery: battery_4s_1300
+
+# Parts defined in this project
+parts:
+  frame:
+    type: cadquery
+    path: frame.py
+    desc: Main unibody frame plate
+
+# Assembly
+assemblies:
+  full_assembly:
+    type: assy
+    path: assembly.assy
+    desc: Complete quadcopter with all components
+
+# Manufacturing
+manufacturing:
+  frame:
+    material: "3K Carbon Fiber"
+    thickness: "4mm"
+    process: "CNC cut"
+    finish: "matte"

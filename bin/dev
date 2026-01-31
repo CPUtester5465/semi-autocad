@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# Semi-AutoCAD Development Script
+# Thin wrapper around the Python CLI
+#
+# Usage: ./bin/dev [command] [args...]
+#
+# For full help: ./bin/dev --help
+#
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Set PYTHONPATH for imports
+export PYTHONPATH="$PROJECT_ROOT/scripts:$PROJECT_ROOT:$PYTHONPATH"
+
+# Run the Python CLI
+exec python -m semicad --project "$PROJECT_ROOT" "$@"

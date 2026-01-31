@@ -1,106 +1,166 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Instructions for Claude Code when working in this repository.
 
 ## Project Overview
 
-**semi-autocad** - A system for semi-automatic CAD operations using Claude Code as orchestrator, CadQuery for parametric modeling, and Neo4j for persistent memory/knowledge graph.
-
-**Current MVP:** Quadcopter frame design with parametric mount holes.
+**semi-autocad** - AI-assisted parametric CAD system using:
+- **semicad** - Python CLI and component registry
+- **CadQuery** - Parametric 3D modeling engine
+- **cq-editor** - 3D visualization GUI
+- **cq_warehouse** - Standard parts library (fasteners, bearings)
+- **Neo4j** - Persistent component library and design decisions
 
 ## Architecture
 
 ```
-Claude Code (Orchestrator)
+semicad CLI (./bin/dev)
     │
-    ├── MCP Servers
-    │   ├── cadquery - Parametric CAD engine (primary)
-    │   ├── neo4j-memory-semicad (bolt://localhost:7688) - Component library
-    │   ├── neo4j-cypher-semicad - Direct Cypher queries
-    │   ├── sequential-thinking - Complex design reasoning
-    │   └── playwright - Browser automation (Onshape fallback)
+    ├── Core Library (semicad/)
+    │   ├── cli/commands/     # Click-based CLI
+    │   ├── core/             # Component, Registry, Project
+    │   └── sources/          # Component source adapters
     │
-    ├── Local Tools
-    │   └── cq-editor - 3D visualization GUI
+    ├── Component Sources
+    │   ├── custom (scripts/components.py)
+    │   ├── cq_warehouse (fasteners, bearings)
+    │   └── cq_electronics (boards, connectors)
     │
-    └── Future: Onshape Integration
-        ├── Import STEP for CAM/manufacturing
-        ├── Collaboration & sharing
-        └── Professional drawings
+    ├── Projects (projects/)
+    │   └── quadcopter-5inch/  # MVP project
+    │
+    └── Output
+        ├── STEP files (CAD exchange)
+        ├── STL files (3D printing)
+        └── BOM (bill of materials)
 ```
 
-## MCP Configuration
+## CLI Commands
 
-Project uses local `.claude/settings.json`:
+```bash
+# Core
+./bin/dev view [file]       # Open cq-editor
+./bin/dev build             # Build root project
+./bin/dev export <comp>     # Export component to STEP/STL
+./bin/dev render <stl>      # Render STL to PNG
+./bin/dev test              # Test all imports
 
-| MCP Server | Purpose | Status |
-|------------|---------|--------|
-| cadquery | Parametric CAD modeling | To configure |
-| neo4j-memory-semicad | Component knowledge graph | Configured |
-| neo4j-cypher-semicad | Direct Cypher queries | Configured |
-| sequential-thinking | Design reasoning | Configured |
-| playwright | Browser automation | Configured |
+# Library
+./bin/dev lib list          # List all components
+./bin/dev lib info <comp>   # Component details
+./bin/dev lib fasteners     # Show fastener sizes
+./bin/dev lib bearings      # Show bearing sizes
+./bin/dev search <query>    # Search components
 
-### Neo4j Instance
-- **Container**: `neo4j-semicad`
-- **Bolt**: `bolt://localhost:7688`
-- **Browser**: `http://localhost:7475`
-- **Credentials**: `neo4j` / `semicad2026`
+# Projects
+./bin/dev project info      # Current project info
+./bin/dev project list      # List sub-projects
+./bin/dev project build <name>              # Build sub-project
+./bin/dev project build <name> --variant X  # Build variant
+./bin/dev project view <name>               # Open in cq-editor
+./bin/dev project neo4j     # Open Neo4j browser
+```
 
 ## Project Structure
 
 ```
 /home/user/cad/
-├── scripts/           # CadQuery parametric scripts
-├── output/            # Generated STEP/STL files
-├── components/        # Component definitions
-├── .reports/          # Research and decision reports
-└── .claude/           # MCP configuration
+├── bin/dev                    # CLI entry point (bash wrapper)
+├── semicad/                   # Core Python library
+│   ├── cli/                   # Click CLI
+│   │   └── commands/          # view, build, library, project
+│   ├── core/                  # Component, Registry, Project
+│   └── sources/               # Source adapters (custom, warehouse)
+├── scripts/
+│   ├── components.py          # Drone component library (16 parts)
+│   └── export_views.py        # Export utilities
+├── projects/
+│   └── quadcopter-5inch/      # MVP sub-project
+│       ├── partcad.yaml       # Project manifest
+│       ├── config.py          # Configuration (3 variants)
+│       ├── frame.py           # Frame generator
+│       ├── assembly.py        # Full assembly
+│       ├── build.py           # Build script
+│       └── output/            # Generated files
+├── docs/                      # Documentation
+├── .reports/                  # Research and audit reports
+└── .claude/                   # MCP configuration
 ```
 
-## Workflow
+## Component Registry
 
-1. **Define components** in Neo4j (motors, FC, ESC with mount patterns)
-2. **Query requirements** via neo4j-memory-semicad
-3. **Generate geometry** via CadQuery MCP
-4. **Visualize** in cq-editor
-5. **Export** STEP/STL for manufacturing
-6. **Store successful designs** back to Neo4j
+Access components via the registry:
 
-## Key Commands
+```python
+from semicad import get_registry
 
-```bash
-# Launch visualization
-cq-editor
+registry = get_registry()
 
-# Run CadQuery script
-python scripts/quadcopter_frame.py
+# Custom drone components
+motor = registry.get("motor_2207")
+fc = registry.get("fc_f405_30x30")
 
-# View Neo4j
-open http://localhost:7475
+# cq_warehouse fasteners
+screw = registry.get("SocketHeadCapScrew", size="M3-0.5", length=10)
+
+# Access geometry
+geometry = motor.geometry  # CadQuery Workplane
 ```
 
-## Component Library (Neo4j)
+## Sub-Project Development
 
-Standard patterns stored in knowledge graph:
-- FC mount: 30.5mm, 20mm square patterns
-- Motor mounts: Various circular patterns (12mm, 16mm, 19mm)
-- Hardware: M2, M3 clearance holes
+Each sub-project in `projects/` should have:
 
-Query example:
-```cypher
-MATCH (m:Component {type: "motor"})-[:HAS_MOUNT]->(p:MountPattern)
-WHERE m.name CONTAINS "2207"
-RETURN m.name, p.spacing_mm, p.hole_diameter_mm
+```
+projects/<name>/
+├── partcad.yaml       # Manifest with config, dependencies
+├── config.py          # Parameters and variants
+├── frame.py           # Part generators (show_object at module level)
+├── assembly.py        # Assembly with positioned components
+├── build.py           # CLI build script with argparse
+└── output/            # Generated STEP, STL, BOM
 ```
 
-## Reports
+**Important for cq-editor:** Put `show_object()` at module level (not inside `if __name__`):
 
-- `.reports/mcp-research-20260131.md` - Full MCP ecosystem research
-- `.reports/mvp-decision-cadquery-20260131.md` - Stack decision rationale
+```python
+# Generate for visualization
+_frame = generate_frame()
 
-## External Resources
+# For cq-editor
+try:
+    show_object(_frame, name="Frame")
+except NameError:
+    pass  # Not in cq-editor
 
-- CadQuery Docs: https://cadquery.readthedocs.io/
-- cq-editor: https://github.com/CadQuery/CQ-editor
-- Onshape API (future): https://onshape-public.github.io/docs/
+# CLI execution
+if __name__ == "__main__":
+    # export, print, etc.
+```
+
+## Design Workflow
+
+1. **Browse components:** `./bin/dev lib list`, `./bin/dev search motor`
+2. **Create sub-project:** Copy from quadcopter-5inch template
+3. **Define config:** Set parameters in config.py
+4. **Generate parts:** Write CadQuery generators
+5. **Position assembly:** Use component registry
+6. **Visualize:** `./bin/dev project view <name>`
+7. **Build:** `./bin/dev project build <name>`
+
+## Neo4j (Design Memory)
+
+- **URL:** http://localhost:7475
+- **Bolt:** bolt://localhost:7688
+- **Credentials:** neo4j / semicad2026
+
+Store design decisions and component relationships for cross-session continuity.
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `scripts/components.py` | 16 drone components (motors, FC, ESC, batteries, props) |
+| `semicad/core/registry.py` | Component discovery and loading |
+| `semicad/sources/warehouse.py` | cq_warehouse adapter |
+| `projects/quadcopter-5inch/build.py` | Example build script with variants |

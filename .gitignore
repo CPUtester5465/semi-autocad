@@ -1,16 +1,44 @@
-# Reports and backups
-backups/
-screenshots/
-# Supabase local
-supabase/
-.supabase/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
 
-# Claude Code local settings (contains credentials)
-.claude/settings.json
+# Output files (generated, not tracked)
+output/
+*/output/
 
-# Neo4j
-neo4j-data/
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Environment
 .env
 .env.local
+.venv/
+venv/
+
+# Claude Code local settings (contains credentials)
+.claude/settings.json
+
+# Neo4j data
+neo4j-data/
+
+# Temporary
+*.tmp
+*.bak
+.cache/
+
+# PartCAD cache
+.partcad/
