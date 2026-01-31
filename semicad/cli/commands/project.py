@@ -4,11 +4,203 @@ Project commands - Project management and testing.
 
 import click
 
+from semicad.templates import (
+    TEMPLATES,
+    scaffold_project,
+    validate_project_name,
+    remove_project,
+    sync_partcad,
+)
+
 
 @click.group()
 def project():
     """Project management commands."""
     pass
+
+
+@project.command("new")
+@click.argument("name")
+@click.option(
+    "--template", "-t",
+    type=click.Choice(TEMPLATES),
+    default="basic",
+    help="Project template to use"
+)
+@click.option(
+    "--description", "-d",
+    default="",
+    help="Project description"
+)
+@click.pass_context
+def new_project(ctx, name, template, description):
+    """Create a new sub-project from a template.
+
+    NAME is the project name (e.g., 'drone-7inch', 'controller-box').
+
+    Examples:
+
+        ./bin/dev project new my-widget
+
+        ./bin/dev project new drone-7inch --template quadcopter
+
+        ./bin/dev project new sensor-box --template enclosure -d "Weatherproof sensor housing"
+    """
+    proj = ctx.obj["project"]
+
+    # Validate name
+    is_valid, result = validate_project_name(name)
+    if not is_valid:
+        click.echo(f"Error: {result}", err=True)
+        raise SystemExit(1)
+
+    normalized_name = result
+
+    # Check if already exists
+    project_dir = proj.projects_dir / normalized_name
+    if project_dir.exists():
+        click.echo(f"Error: Project '{normalized_name}' already exists at {project_dir}", err=True)
+        raise SystemExit(1)
+
+    # Create the project
+    click.echo(f"Creating new project: {normalized_name}")
+    click.echo(f"  Template: {template}")
+    click.echo(f"  Location: {project_dir}")
+    click.echo()
+
+    try:
+        created_dir = scaffold_project(
+            name=name,
+            template_name=template,
+            project_root=proj.root,
+            description=description,
+        )
+
+        click.echo("Created files:")
+        for f in sorted(created_dir.iterdir()):
+            click.echo(f"  - {f.name}")
+
+        click.echo()
+        click.echo("Project created successfully!")
+        click.echo()
+        click.echo("Next steps:")
+        click.echo(f"  1. Edit configuration: projects/{normalized_name}/config.py")
+        click.echo(f"  2. View in cq-editor:  ./bin/dev project view {normalized_name}")
+        click.echo(f"  3. Build outputs:      ./bin/dev project build {normalized_name}")
+
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"Error creating project: {e}", err=True)
+        raise SystemExit(1)
+
+
+@project.command("remove")
+@click.argument("name")
+@click.option(
+    "--force", "-f",
+    is_flag=True,
+    help="Skip confirmation prompt"
+)
+@click.pass_context
+def remove_project_cmd(ctx, name, force):
+    """Remove a sub-project completely.
+
+    This will delete the project directory and remove the entry from partcad.yaml.
+
+    Examples:
+
+        ./bin/dev project remove my-widget
+
+        ./bin/dev project remove old-project --force
+    """
+    proj = ctx.obj["project"]
+
+    # Validate name
+    is_valid, result = validate_project_name(name)
+    if not is_valid:
+        click.echo(f"Error: {result}", err=True)
+        raise SystemExit(1)
+
+    normalized_name = result
+    project_dir = proj.projects_dir / normalized_name
+
+    # Check what exists
+    dir_exists = project_dir.exists()
+
+    if not dir_exists:
+        click.echo(f"Project directory not found: {project_dir}")
+        click.echo("Checking for stale partcad.yaml entry...")
+
+        # Try to remove just the partcad entry
+        from semicad.templates import remove_from_partcad
+        if remove_from_partcad(proj.root, normalized_name):
+            click.echo(f"Removed stale entry '{normalized_name}' from partcad.yaml")
+        else:
+            click.echo(f"No entry found for '{normalized_name}' in partcad.yaml")
+        return
+
+    # Confirm deletion
+    if not force:
+        # List files that will be deleted
+        files = list(project_dir.iterdir())
+        click.echo(f"This will permanently delete project '{normalized_name}':")
+        click.echo(f"  Directory: {project_dir}")
+        click.echo(f"  Files: {len(files)} items")
+        for f in sorted(files)[:10]:
+            click.echo(f"    - {f.name}")
+        if len(files) > 10:
+            click.echo(f"    ... and {len(files) - 10} more")
+        click.echo()
+
+        if not click.confirm("Are you sure you want to delete this project?"):
+            click.echo("Cancelled.")
+            return
+
+    # Perform removal
+    try:
+        dir_removed, partcad_removed = remove_project(
+            name=name,
+            project_root=proj.root,
+        )
+
+        click.echo(f"Project '{normalized_name}' removed:")
+        click.echo(f"  Directory deleted: {'yes' if dir_removed else 'no'}")
+        click.echo(f"  partcad.yaml updated: {'yes' if partcad_removed else 'no'}")
+
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"Error removing project: {e}", err=True)
+        raise SystemExit(1)
+
+
+@project.command("sync")
+@click.pass_context
+def sync_projects(ctx):
+    """Sync partcad.yaml with actual project directories.
+
+    Removes entries from partcad.yaml that point to non-existent project directories.
+    This is useful for cleaning up after manual deletions.
+
+    Examples:
+
+        ./bin/dev project sync
+    """
+    proj = ctx.obj["project"]
+
+    click.echo("Syncing partcad.yaml with project directories...")
+
+    removed = sync_partcad(proj.root)
+
+    if removed:
+        click.echo(f"Removed {len(removed)} stale entries:")
+        for name in removed:
+            click.echo(f"  - {name}")
+    else:
+        click.echo("No stale entries found. partcad.yaml is in sync.")
 
 
 @project.command("info")
