@@ -1,0 +1,17 @@
+# Reports and backups
+.reports
+backups/
+
+# Supabase local
+supabase/
+.supabase/
+
+# Claude Code local settings (contains credentials)
+.claude/settings.json
+
+# Neo4j
+neo4j-data/
+
+# Environment
+.env
+.env.local
