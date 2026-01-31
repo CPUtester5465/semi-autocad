@@ -1,6 +1,6 @@
 # CQ-Editor Multi-File Project Setup
 
-This document explains how to make cq-editor work with multi-file structures (importing modules from other files).
+How to make cq-editor work with multi-file structures (importing modules from other files).
 
 ---
 
@@ -16,137 +16,121 @@ cq-editor can't find the module because the script's directory isn't in Python's
 
 ---
 
-## Solutions (Choose One)
+## Our Solution: CLI + Package Install
 
-### Solution 1: Install as Package (Recommended)
+We use a combination approach:
 
-**Best for:** Larger projects, team development, consistent behavior.
+### 1. Package Installation
 
-1. Create `pyproject.toml` in project root:
-```toml
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+The project is installed as an editable package:
 
-[project]
-name = "semicad"
-version = "0.1.0"
-dependencies = ["cadquery"]
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["scripts*"]
-```
-
-2. Create `scripts/__init__.py`:
-```python
-# Makes scripts/ a Python package
-```
-
-3. Install in development mode:
 ```bash
-cd /home/user/cad
 pip install -e .
 ```
 
-4. Use package imports in scripts:
+This allows imports like:
 ```python
-from scripts.components import get_component  # Works everywhere!
+from scripts.components import get_component
+from semicad import get_registry
 ```
 
-**Advantage:** Works from any directory, consistent with Python best practices.
+### 2. CLI with PYTHONPATH
 
----
-
-### Solution 2: CQ-Editor Preference Setting
-
-**Best for:** Quick projects, single-directory scripts.
-
-1. Open cq-editor
-2. Go to **Edit → Preferences → Debugger**
-3. Check **"Add script dir to path"**
-4. Restart cq-editor
-
-Now imports from the same directory will work:
-```python
-from components import get_component  # Works if in same dir
-```
-
-**Limitation:** Only works for files in the same directory as the main script.
-
----
-
-### Solution 3: PYTHONPATH Environment Variable
-
-**Best for:** Temporary fixes, testing.
+The `./bin/dev` CLI sets PYTHONPATH automatically:
 
 ```bash
-# Set before launching cq-editor
-export PYTHONPATH="/home/user/cad/scripts:$PYTHONPATH"
-cq-editor /home/user/cad/scripts/quadcopter_assembly.py
-```
+# Opens cq-editor with correct paths
+./bin/dev view scripts/components.py
 
-Or create a launcher script:
-
-```bash
-#!/bin/bash
-# cq-editor-launcher.sh
-export PYTHONPATH="/home/user/cad/scripts:$PYTHONPATH"
-cq-editor "$@"
+# For sub-projects
+./bin/dev project view quadcopter-5inch
+./bin/dev project view quadcopter-5inch -f frame.py
 ```
 
 ---
 
-### Solution 4: sys.path Hack (Not Recommended)
+## Key Pattern for cq-editor Scripts
 
-**Best for:** Quick debugging, understanding the problem.
+**Important:** Put `show_object()` at module level, not inside `if __name__`:
 
-Add at the top of your script:
 ```python
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent))
+#!/usr/bin/env python3
+"""My CAD Script"""
 
-from components import get_component  # Now works
+import cadquery as cq
+from scripts.components import get_component
+
+# === Generate geometry ===
+motor = get_component("motor_2207")
+frame = cq.Workplane("XY").box(100, 100, 4)
+
+# === For cq-editor (at module level!) ===
+try:
+    show_object(frame, name="Frame", options={"color": "gold"})
+    show_object(motor, name="Motor", options={"color": "gray"})
+except NameError:
+    pass  # Not running in cq-editor
+
+# === CLI execution ===
+if __name__ == "__main__":
+    import cadquery as cq
+    cq.exporters.export(frame, "output/frame.step")
+    print("Exported frame.step")
 ```
 
-**Limitation:** Modifies global state, can cause issues with module reloading.
+**Why?** cq-editor executes the entire script but `show_object` only exists in the cq-editor context. The try/except allows the same script to work both in cq-editor and from command line.
 
 ---
 
-## Our Project Structure
+## Project Structure
 
 ```
 /home/user/cad/
-├── pyproject.toml          # Package definition
+├── bin/dev                     # CLI (sets PYTHONPATH)
+├── pyproject.toml              # Package definition
+├── semicad/                    # Core library
+│   ├── cli/                    # CLI commands
+│   ├── core/                   # Component, Registry
+│   └── sources/                # Source adapters
 ├── scripts/
-│   ├── __init__.py         # Makes it a package
-│   ├── components.py       # Component library
-│   ├── quadcopter_assembly.py
-│   └── export_views.py
-└── output/
-```
-
-**Import pattern:**
-```python
-from scripts.components import get_component
-from scripts.export_views import export_svg_views
+│   ├── __init__.py             # Package marker
+│   └── components.py           # Component library
+└── projects/
+    └── quadcopter-5inch/       # Sub-project
+        ├── frame.py            # Part (cq-editor compatible)
+        ├── assembly.py         # Assembly (cq-editor compatible)
+        └── build.py            # Build script (CLI only)
 ```
 
 ---
 
-## Verification
+## Quick Reference
 
-Test imports work from anywhere:
+### Open in cq-editor
+
 ```bash
-cd /tmp
-python -c "from scripts.components import get_component; print('OK')"
+# Root scripts
+./bin/dev view scripts/components.py
+
+# Sub-project files
+./bin/dev project view quadcopter-5inch
+./bin/dev project view quadcopter-5inch -f frame.py
 ```
 
-Test cq-editor:
-```bash
-cq-editor /home/user/cad/scripts/quadcopter_assembly.py
-# Press F5 - should render without ModuleNotFoundError
+### Import Patterns
+
+```python
+# From scripts/
+from scripts.components import get_component, motor, flight_controller
+
+# From semicad library
+from semicad import get_registry
+from semicad.core.component import Component
+
+# Within a sub-project (e.g., in projects/quadcopter-5inch/assembly.py)
+from config import CONFIG        # Local to project
+from frame import generate_frame # Local to project
+from scripts.components import get_component  # From root
 ```
 
 ---
@@ -155,33 +139,49 @@ cq-editor /home/user/cad/scripts/quadcopter_assembly.py
 
 ### "ModuleNotFoundError: No module named 'scripts'"
 
-Package not installed. Run:
+Package not installed:
 ```bash
 cd /home/user/cad
 pip install -e .
 ```
 
-### "ModuleNotFoundError: No module named 'components'"
+### "ModuleNotFoundError: No module named 'semicad'"
 
-Using old import style. Change:
-```python
-# Old (doesn't work in cq-editor)
-from components import get_component
-
-# New (works everywhere)
-from scripts.components import get_component
+Same fix - reinstall:
+```bash
+pip install -e .
 ```
 
-### Changes to components.py not reflected
+### Changes not reflected in cq-editor
 
-cq-editor caches modules. Either:
+cq-editor caches modules. Options:
 1. Restart cq-editor
-2. Or: Edit → Preferences → Debugger → Check "Reload CQ" (forces module reload)
+2. Edit → Preferences → Debugger → Check "Reload CQ"
+
+### Empty viewport after F5
+
+1. Check console (bottom panel) for errors
+2. Ensure `show_object()` is at module level (not inside `if __name__`)
+3. Zoom out - model might be small
+
+### Can't find local imports in sub-project
+
+Sub-projects need path setup. Use the CLI:
+```bash
+./bin/dev project view quadcopter-5inch -f assembly.py
+```
+
+Or add to your script:
+```python
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+```
 
 ---
 
 ## Sources
 
-- [CQ-editor Issue #156: ModuleNotFoundError for local files](https://github.com/CadQuery/CQ-editor/issues/156)
-- [CQ-editor Issue #347: Importing Python modules](https://github.com/CadQuery/CQ-editor/issues/347)
-- [CQ-editor Installation Wiki](https://github.com/CadQuery/CQ-editor/wiki/Installation)
+- [CQ-editor Issue #156: ModuleNotFoundError](https://github.com/CadQuery/CQ-editor/issues/156)
+- [CQ-editor Issue #347: Importing modules](https://github.com/CadQuery/CQ-editor/issues/347)

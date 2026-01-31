@@ -4,3 +4,6 @@ dependencies:
   pub:
     type: git
     url: https://github.com/partcad/partcad-index.git
+  enclosure-test:
+    type: local
+    path: projects/enclosure-test

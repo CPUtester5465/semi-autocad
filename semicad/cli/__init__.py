@@ -13,12 +13,17 @@ from semicad.core.project import get_project, Project
 
 
 # Create main CLI group
-@click.group()
+@click.group(invoke_without_command=True)
 @click.option("--project", "-p", type=click.Path(exists=True), help="Project root directory")
 @click.pass_context
 def cli(ctx, project):
     """Semi-AutoCAD - AI-assisted CAD design system."""
     ctx.ensure_object(dict)
+
+    # Show help if no command given
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+        return
 
     # Set project context
     if project:

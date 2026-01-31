@@ -1,0 +1,50 @@
+# enclosure-test Enclosure Project
+# A enclosure project
+
+name: enclosure-test
+desc: A enclosure project
+version: "0.1.0"
+
+# Build configuration
+config:
+  # Outer dimensions
+  width: 100          # mm, external width
+  height: 60          # mm, external height
+  depth: 40           # mm, external depth
+
+  # Wall properties
+  wall_thickness: 2.5   # mm
+  corner_radius: 3      # mm
+
+  # Lid
+  lid_style: "snap"     # snap, screw, slide
+  lid_clearance: 0.2    # mm, gap for fit
+
+  # Material
+  material: "PETG"
+
+# Parts defined in this project
+parts:
+  enclosure:
+    type: cadquery
+    path: frame.py
+    desc: Main enclosure body
+  lid:
+    type: cadquery
+    path: frame.py
+    desc: Enclosure lid
+
+# Assembly
+assemblies:
+  full_assembly:
+    type: assy
+    path: assembly.assy
+    desc: Complete enclosure with lid
+
+# Manufacturing
+manufacturing:
+  enclosure:
+    material: "PETG"
+    process: "3D Print (FDM)"
+    infill: "20%"
+    layer_height: "0.2mm"
