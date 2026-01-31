@@ -1,7 +1,6 @@
 # Reports and backups
-.reports
 backups/
-
+screenshots/
 # Supabase local
 supabase/
 .supabase/
