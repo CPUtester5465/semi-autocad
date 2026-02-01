@@ -275,7 +275,7 @@ def get_registry() -> ComponentRegistry:
 def _init_default_sources(registry: ComponentRegistry) -> None:
     """Initialize registry with default sources."""
     # Import here to avoid circular imports
-    from semicad.sources import custom, warehouse, electronics
+    from semicad.sources import custom, warehouse, electronics, partcad_source
 
     try:
         registry.register_source(custom.CustomSource())
@@ -291,3 +291,8 @@ def _init_default_sources(registry: ComponentRegistry) -> None:
         registry.register_source(electronics.ElectronicsSource())
     except Exception:
         pass  # cq_electronics not installed
+
+    try:
+        registry.register_source(partcad_source.PartCADSource())
+    except Exception:
+        pass  # PartCAD not installed or initialization failed

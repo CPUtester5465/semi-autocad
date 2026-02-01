@@ -51,7 +51,7 @@ def cli(ctx, project, json_output, verbose):
 
 
 # Import and register command groups
-from semicad.cli.commands import view, build, library, project as proj_cmd, completion
+from semicad.cli.commands import view, build, library, project as proj_cmd, completion, partcad_cmd
 
 cli.add_command(view.view)
 cli.add_command(view.edit)
@@ -63,6 +63,7 @@ cli.add_command(library.search)
 cli.add_command(proj_cmd.project)
 cli.add_command(proj_cmd.test)
 cli.add_command(completion.completion)
+cli.add_command(partcad_cmd.partcad)
 
 
 # Quick aliases

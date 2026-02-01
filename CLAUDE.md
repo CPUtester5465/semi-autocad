@@ -24,7 +24,8 @@ semicad CLI (./bin/dev)
     ├── Component Sources
     │   ├── custom (scripts/components.py)
     │   ├── cq_warehouse (fasteners, bearings)
-    │   └── cq_electronics (boards, connectors)
+    │   ├── cq_electronics (boards, connectors)
+    │   └── partcad (PartCAD package manager)
     │
     ├── Projects (projects/)
     │   └── quadcopter-5inch/  # MVP project
@@ -51,6 +52,15 @@ semicad CLI (./bin/dev)
 ./bin/dev lib fasteners     # Show fastener sizes
 ./bin/dev lib bearings      # Show bearing sizes
 ./bin/dev search <query>    # Search components
+
+# PartCAD (Package Manager)
+./bin/dev partcad search "servo"                    # Search PartCAD index
+./bin/dev partcad list                              # List top-level packages
+./bin/dev partcad list //pub/std/metric/cqwarehouse # List parts in package
+./bin/dev partcad info <path>                       # Part details with parameters
+./bin/dev partcad sizes <path>                      # Available sizes for parametric part
+./bin/dev partcad render <path> -f stl -o out.stl   # Export part to STL/STEP
+./bin/dev partcad install <package>                 # Pre-fetch package for offline
 
 # Projects
 ./bin/dev project info      # Current project info
@@ -107,6 +117,9 @@ screw = registry.get("SocketHeadCapScrew", size="M3-0.5", length=10)
 rpi = registry.get("RPi3b")
 header = registry.get("PinHeader", rows=2, columns=20)
 chip = registry.get("BGA", length=10, width=10)
+
+# PartCAD parts (from public index)
+bolt = registry.get("//pub/std/metric/cqwarehouse:fastener/hexhead-iso4017", size="M8-1.25", length=20)
 
 # Access geometry
 geometry = motor.geometry  # CadQuery Workplane
@@ -220,6 +233,81 @@ COLORS["solder_mask_green"]        # Solder mask
 - Components from `cq_electronics` may return `Assembly` objects, which are automatically converted to `Workplane` via `toCompound()`
 - Not all cq_electronics components are exposed; catalog can be extended in `semicad/sources/electronics.py`
 
+## PartCAD Components
+
+PartCAD provides access to a vast library of community-contributed CAD parts.
+
+### Available Packages
+
+| Package | Contents |
+|---------|----------|
+| `//pub/std/metric/cqwarehouse` | ISO/DIN fasteners (bolts, screws, nuts) |
+| `//pub/std/metric/nema` | NEMA stepper motors |
+| `//pub/std/imperial` | Imperial (inch) fasteners |
+| `//pub/electromechanics` | Servos, motors, mechanical components |
+| `//pub/electronics` | Electronic enclosures and housings |
+| `//pub/robotics` | Robotics components |
+
+### Usage Examples
+
+```python
+from semicad import get_registry
+
+registry = get_registry()
+
+# ISO 4017 hex head bolt (M10 x 30mm)
+bolt = registry.get(
+    "//pub/std/metric/cqwarehouse:fastener/hexhead-iso4017",
+    size="M10-1.5",
+    length=30
+)
+
+# Socket head cap screw (ISO 4762)
+screw = registry.get(
+    "//pub/std/metric/cqwarehouse:fastener/socketheadcap-iso4762",
+    size="M3-0.5",
+    length=10
+)
+
+# Access geometry
+geometry = bolt.geometry  # CadQuery Workplane
+```
+
+### Part Path Format
+
+PartCAD uses a hierarchical path format:
+```
+//<package_path>:<part_name>
+```
+
+Examples:
+- `//pub/std/metric/cqwarehouse:fastener/iso4017`
+- `//pub/electromechanics/towerpro:servo/mg995`
+
+### CLI Examples
+
+```bash
+# Search for servo motors
+./bin/dev partcad search "servo"
+
+# List available sizes for a bolt
+./bin/dev partcad sizes "//pub/std/metric/cqwarehouse:fastener/hexhead-iso4017"
+
+# Export M10 bolt to STL
+./bin/dev partcad render "//pub/std/metric/cqwarehouse:fastener/hexhead-iso4017" \
+    --size="size=M10-1.5" --size="length=30" -f stl -o bolt.stl
+
+# Pre-fetch electromechanics package for offline use
+./bin/dev partcad install pub/electromechanics
+```
+
+### Limitations
+
+- First access requires network to clone package repositories
+- PartCAD CLI (`pc` command) has Click version compatibility issues; use Python API or `./bin/dev partcad` instead
+- Cached at `~/.cache/partcad` (managed by PartCAD)
+- Some deprecation warnings may appear from older packages
+
 ## Sub-Project Development
 
 Each sub-project in `projects/` should have:
@@ -277,6 +365,7 @@ Store design decisions and component relationships for cross-session continuity.
 | `semicad/core/registry.py` | Component discovery and loading |
 | `semicad/sources/warehouse.py` | cq_warehouse adapter (fasteners, bearings) |
 | `semicad/sources/electronics.py` | cq_electronics adapter (boards, connectors) |
+| `semicad/sources/partcad_source.py` | PartCAD package manager adapter |
 | `projects/quadcopter-5inch/build.py` | Example build script with variants |
 
 ## Dependency Version Compatibility
@@ -287,5 +376,6 @@ Store design decisions and component relationships for cross-session continuity.
 | cadquery | 2.5.0 | Core CAD engine |
 | cq_electronics | 0.2.0 | Electronic components (RPi, connectors) |
 | cq_warehouse | - | Fasteners and bearings (no minimum) |
+| partcad | 0.7.135 | Package manager for CAD parts |
 
 The `ElectronicsSource` adapter checks cq_electronics version on initialization and warns if the installed version is below the minimum. Version info is included in error messages for debugging.
