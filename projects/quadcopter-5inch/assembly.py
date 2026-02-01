@@ -6,6 +6,7 @@ Positions all components and frame together.
 
 Usage:
     python assembly.py           # Export full assembly
+    python assembly.py --quality fine
     cq-editor assembly.py        # Interactive visualization
 """
 
@@ -24,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config import CONFIG, QuadConfig
 from frame import generate_frame
 from components import get_component
+from semicad.export import export_step, export_stl, STLQuality
 
 
 @dataclass
@@ -181,21 +183,26 @@ class QuadcopterAssembly:
 
         return results
 
-    def export(self, output_dir: Path):
-        """Export assembly to files."""
+    def export(self, output_dir: Path, quality: STLQuality = STLQuality.NORMAL):
+        """Export assembly to files.
+
+        Args:
+            output_dir: Directory to write files
+            quality: STL mesh quality
+        """
         output_dir.mkdir(exist_ok=True)
 
         # Export combined assembly
         combined = self.get_combined()
-        cq.exporters.export(combined, str(output_dir / "assembly.step"))
-        cq.exporters.export(combined, str(output_dir / "assembly.stl"))
+        export_step(combined, output_dir / "assembly.step")
+        export_stl(combined, output_dir / "assembly.stl", quality=quality)
 
         # Export frame only
         if self.frame:
-            cq.exporters.export(self.frame, str(output_dir / "frame.step"))
-            cq.exporters.export(self.frame, str(output_dir / "frame.stl"))
+            export_step(self.frame, output_dir / "frame.step")
+            export_stl(self.frame, output_dir / "frame.stl", quality=quality)
 
-        print(f"Exported to {output_dir}")
+        print(f"Exported to {output_dir} (quality: {quality.value})")
 
     def show_in_editor(self):
         """Display in cq-editor (call from script)."""

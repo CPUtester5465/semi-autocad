@@ -121,18 +121,34 @@ def generate_part(config: Config = CONFIG) -> cq.Workplane:
     return part
 
 
-def export_part(output_dir: Path, config: Config = CONFIG):
-    """Export part to STEP and STL."""
+def export_part(output_dir: Path, config: Config = CONFIG, quality: str = "normal"):
+    """Export part to STEP and STL using semicad.export module.
+
+    Args:
+        output_dir: Directory for output files
+        config: Configuration parameters
+        quality: STL quality preset (draft, normal, fine, ultra)
+    """
+    from semicad.export import export_step, export_stl, STLQuality
+
     part = generate_part(config)
+
+    quality_map = {
+        "draft": STLQuality.DRAFT,
+        "normal": STLQuality.NORMAL,
+        "fine": STLQuality.FINE,
+        "ultra": STLQuality.ULTRA,
+    }
+    stl_quality = quality_map.get(quality, STLQuality.NORMAL)
 
     step_path = output_dir / "part.step"
     stl_path = output_dir / "part.stl"
 
-    cq.exporters.export(part, str(step_path))
-    cq.exporters.export(part, str(stl_path))
+    export_step(part, step_path)
+    export_stl(part, stl_path, quality=stl_quality)
 
     print(f"Exported: {step_path}")
-    print(f"Exported: {stl_path}")
+    print(f"Exported: {stl_path} (quality: {quality})")
 
     return part
 
@@ -237,15 +253,31 @@ class Assembly:
             combined = combined.union(comp.positioned)
         return combined
 
-    def export(self, output_dir: Path):
-        """Export assembly to files."""
+    def export(self, output_dir: Path, quality: str = "normal"):
+        """Export assembly to files using semicad.export module.
+
+        Args:
+            output_dir: Directory for output files
+            quality: STL quality preset (draft, normal, fine, ultra)
+        """
+        from semicad.export import export_step, export_stl, STLQuality
+
         output_dir.mkdir(exist_ok=True)
 
-        combined = self.get_combined()
-        cq.exporters.export(combined, str(output_dir / "assembly.step"))
-        cq.exporters.export(combined, str(output_dir / "assembly.stl"))
+        quality_map = {
+            "draft": STLQuality.DRAFT,
+            "normal": STLQuality.NORMAL,
+            "fine": STLQuality.FINE,
+            "ultra": STLQuality.ULTRA,
+        }
+        stl_quality = quality_map.get(quality, STLQuality.NORMAL)
 
-        print(f"Exported to {output_dir}")
+        combined = self.get_combined()
+
+        export_step(combined, output_dir / "assembly.step")
+        export_stl(combined, output_dir / "assembly.stl", quality=stl_quality)
+
+        print(f"Exported to {output_dir} (quality: {quality})")
 
 
 def create_assembly(config: Config = CONFIG) -> Assembly:
@@ -295,17 +327,17 @@ Generates all output files for manufacturing and visualization.
 Outputs:
 - part.step / part.stl      - Main part (for CNC/3D print)
 - assembly.step / assembly.stl - Full assembly
-- bom.txt                    - Bill of materials
+- bom.csv                    - Bill of materials
 
 Usage:
     python build.py
     python build.py --variant small
+    python build.py --quality fine
     python build.py --export-all
 """
 
 import argparse
 from pathlib import Path
-from datetime import datetime
 import sys
 
 # Setup paths
@@ -319,30 +351,32 @@ from frame import generate_part, export_part
 from assembly import create_assembly
 
 
-def generate_bom(config: Config) -> str:
-    """Generate bill of materials."""
-    bom = f"""
-BILL OF MATERIALS
-=================
-Project: $name
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+def generate_bom(config: Config, output_dir: Path):
+    """Generate bill of materials using semicad.export module."""
+    from semicad.export import BOM, BOMEntry, export_bom
 
-MAIN PART
----------
-- 1x Main component
-  Dimensions: {config.width} x {config.height} x {config.depth} mm
-  Thickness: {config.thickness}mm
+    bom = BOM(
+        title="$name Bill of Materials",
+        entries=[
+            BOMEntry(
+                name="Main Part",
+                quantity=1,
+                category="structure",
+                source="custom",
+                description=f"{config.width}x{config.height}x{config.depth}mm",
+                params=f"thickness={config.thickness}mm",
+            ),
+        ],
+        notes=f"Generated for $name project",
+    )
 
-HARDWARE
---------
-- (Add hardware as needed)
+    # Export in multiple formats
+    export_bom(bom, output_dir / "bom.csv")
+    export_bom(bom, output_dir / "bom.json")
 
-SPECIFICATIONS
---------------
-- Width: {config.width}mm
-- Height: {config.height}mm
-- Depth: {config.depth}mm
-"""
+    print(f"Exported: {output_dir / 'bom.csv'}")
+    print(f"Exported: {output_dir / 'bom.json'}")
+
     return bom
 
 
@@ -350,6 +384,7 @@ def build_project(
     variant: str = "default",
     output_dir: Path | None = None,
     export_all: bool = False,
+    quality: str = "normal",
 ):
     """
     Build all project outputs.
@@ -358,6 +393,7 @@ def build_project(
         variant: Configuration preset name
         output_dir: Output directory (default: project/output)
         export_all: Export all variants
+        quality: STL mesh quality (draft, normal, fine, ultra)
     """
     if output_dir is None:
         output_dir = project_dir / "output"
@@ -370,35 +406,32 @@ def build_project(
             print(f"{'='*50}")
             variant_dir = output_dir / name
             variant_dir.mkdir(exist_ok=True)
-            _build_variant(config, variant_dir, name)
+            _build_variant(config, variant_dir, name, quality)
     else:
         config = PRESETS.get(variant, CONFIG)
-        _build_variant(config, output_dir, variant)
+        _build_variant(config, output_dir, variant, quality)
 
 
-def _build_variant(config: Config, output_dir: Path, name: str):
+def _build_variant(config: Config, output_dir: Path, name: str, quality: str):
     """Build a single variant."""
     print(f"\\nConfiguration:")
     print(f"  Width: {config.width}mm")
     print(f"  Height: {config.height}mm")
     print(f"  Depth: {config.depth}mm")
+    print(f"  Quality: {quality}")
 
     # Generate part
     print("\\nGenerating part...")
-    export_part(output_dir, config)
+    export_part(output_dir, config, quality=quality)
 
     # Generate assembly
     print("\\nGenerating assembly...")
     assembly = create_assembly(config)
-    assembly.export(output_dir)
+    assembly.export(output_dir, quality=quality)
 
     # Generate BOM
     print("\\nGenerating BOM...")
-    bom = generate_bom(config)
-    bom_path = output_dir / "bom.txt"
-    with open(bom_path, "w") as f:
-        f.write(bom)
-    print(f"Exported: {bom_path}")
+    generate_bom(config, output_dir)
 
     # Summary
     print(f"\\n{'='*50}")
@@ -428,6 +461,12 @@ def main():
         help="Output directory"
     )
     parser.add_argument(
+        "--quality", "-q",
+        choices=["draft", "normal", "fine", "ultra"],
+        default="normal",
+        help="STL mesh quality"
+    )
+    parser.add_argument(
         "--export-all",
         action="store_true",
         help="Export all variants"
@@ -450,6 +489,7 @@ def main():
         variant=args.variant,
         output_dir=args.output,
         export_all=args.export_all,
+        quality=args.quality,
     )
 
 

@@ -7,11 +7,12 @@ Generates all output files for manufacturing and visualization.
 Outputs:
 - frame.step / frame.stl     - Frame only (for CNC)
 - assembly.step / assembly.stl - Full assembly
-- bom.txt                     - Bill of materials
+- bom.csv / bom.json / bom.md  - Bill of materials
 
 Usage:
     python build.py
     python build.py --variant race
+    python build.py --quality fine
     python build.py --export-all
 """
 
@@ -29,58 +30,96 @@ sys.path.insert(0, str(project_dir.parent.parent / "scripts"))
 from config import CONFIG, PRESETS, QuadConfig
 from frame import generate_frame, export_frame
 from assembly import create_assembly
+from semicad.export import STLQuality, BOM, BOMEntry, export_bom
 
 
-def generate_bom(config: QuadConfig) -> str:
-    """Generate bill of materials."""
-    bom = f"""
-BILL OF MATERIALS
-=================
-Project: Quadcopter 5-inch ({config.wheelbase}mm)
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+def generate_bom(config: QuadConfig) -> BOM:
+    """Generate bill of materials using semicad.export."""
+    entries = [
+        # Frame
+        BOMEntry(
+            name=f"Carbon fiber plate ({config.arm_thickness}mm)",
+            quantity=1,
+            category="Frame",
+            description="3K Carbon Fiber, CNC cut",
+        ),
+        # Electronics
+        BOMEntry(
+            name="Flight Controller",
+            quantity=1,
+            category="Electronics",
+            description="30.5x30.5mm mount",
+        ),
+        BOMEntry(
+            name="4-in-1 ESC",
+            quantity=1,
+            category="Electronics",
+            description="30.5x30.5mm mount, 45A",
+        ),
+        BOMEntry(
+            name=f"Brushless Motor {config.motor_size}",
+            quantity=4,
+            category="Electronics",
+            description=f"{config.motor_mount}mm mount pattern",
+        ),
+        # Propulsion
+        BOMEntry(
+            name=f"Propeller {config.prop_size} inch",
+            quantity=4,
+            category="Propulsion",
+        ),
+        # Power
+        BOMEntry(
+            name=f"LiPo Battery {config.battery_cells}S {config.battery_capacity}mAh",
+            quantity=1,
+            category="Power",
+        ),
+        # Hardware
+        BOMEntry(
+            name="M3x25 Socket Head Screw",
+            quantity=4,
+            category="Hardware",
+            description="Stack mounting",
+        ),
+        BOMEntry(
+            name="M3 Nut",
+            quantity=4,
+            category="Hardware",
+        ),
+        BOMEntry(
+            name="M3x8 Button Head Screw",
+            quantity=16,
+            category="Hardware",
+            description="Motor mounting",
+        ),
+        BOMEntry(
+            name="M3 Standoff 20mm",
+            quantity=4,
+            category="Hardware",
+            description="Stack spacing",
+        ),
+    ]
 
-FRAME
------
-- 1x Carbon fiber plate ({config.arm_thickness}mm thick)
-  Material: 3K Carbon Fiber
-  Process: CNC cut
-
-ELECTRONICS
------------
-- 1x Flight Controller (30.5x30.5mm mount)
-- 1x 4-in-1 ESC (30.5x30.5mm mount, 45A)
-- 4x Brushless Motor ({config.motor_size}, {config.motor_mount}mm mount)
-
-PROPULSION
-----------
-- 4x Propeller ({config.prop_size} inch)
-
-POWER
------
-- 1x LiPo Battery ({config.battery_cells}S {config.battery_capacity}mAh)
-
-HARDWARE
---------
-- 4x M3x25 Socket Head Screw (stack mounting)
-- 4x M3 Nut
-- 16x M3x8 Button Head Screw (motor mounting)
-- 4x M3 Standoff 20mm (stack spacing)
-
-SPECIFICATIONS
---------------
+    # Build notes with specifications
+    notes = f"""Specifications:
 - Wheelbase: {config.wheelbase}mm
 - Arm length: {config.arm_length:.1f}mm
 - Prop clearance: {config.check_prop_clearance()[1]:.1f}mm
 - Frame weight (est): ~35g
-- AUW (est): ~350g
-"""
-    return bom
+- AUW (est): ~350g"""
+
+    return BOM(
+        title=f"Quadcopter 5-inch ({config.wheelbase}mm)",
+        entries=entries,
+        notes=notes,
+    )
 
 
 def build_project(
     variant: str = "freestyle",
     output_dir: Path | None = None,
     export_all: bool = False,
+    quality: STLQuality = STLQuality.NORMAL,
 ):
     """
     Build all project outputs.
@@ -89,6 +128,7 @@ def build_project(
         variant: Configuration preset name
         output_dir: Output directory (default: project/output)
         export_all: Export all variants
+        quality: STL mesh quality
     """
     if output_dir is None:
         output_dir = project_dir / "output"
@@ -102,19 +142,25 @@ def build_project(
             print(f"{'='*50}")
             variant_dir = output_dir / name
             variant_dir.mkdir(exist_ok=True)
-            _build_variant(config, variant_dir, name)
+            _build_variant(config, variant_dir, name, quality)
     else:
         # Build single variant
         config = PRESETS.get(variant, CONFIG)
-        _build_variant(config, output_dir, variant)
+        _build_variant(config, output_dir, variant, quality)
 
 
-def _build_variant(config: QuadConfig, output_dir: Path, name: str):
+def _build_variant(
+    config: QuadConfig,
+    output_dir: Path,
+    name: str,
+    quality: STLQuality = STLQuality.NORMAL,
+):
     """Build a single variant."""
     print(f"\nConfiguration:")
     print(f"  Wheelbase: {config.wheelbase}mm")
     print(f"  Props: {config.prop_size} inch")
     print(f"  Motors: {config.motor_size}")
+    print(f"  Quality: {quality.value}")
 
     # Check clearances
     ok, clearance = config.check_prop_clearance()
@@ -123,20 +169,20 @@ def _build_variant(config: QuadConfig, output_dir: Path, name: str):
 
     # Generate frame
     print("\nGenerating frame...")
-    frame = export_frame(output_dir, config)
+    frame = export_frame(output_dir, config, quality=quality)
 
     # Generate assembly
     print("\nGenerating assembly...")
     assembly = create_assembly(config)
-    assembly.export(output_dir)
+    assembly.export(output_dir, quality=quality)
 
-    # Generate BOM
+    # Generate BOM using semicad.export (export all formats)
     print("\nGenerating BOM...")
     bom = generate_bom(config)
-    bom_path = output_dir / "bom.txt"
-    with open(bom_path, "w") as f:
-        f.write(bom)
-    print(f"Exported: {bom_path}")
+    export_bom(bom, output_dir / "bom.csv")
+    export_bom(bom, output_dir / "bom.json")
+    export_bom(bom, output_dir / "bom.md")
+    print(f"Exported: bom.csv, bom.json, bom.md")
 
     # Summary
     print(f"\n{'='*50}")
@@ -166,6 +212,12 @@ def main():
         help="Output directory"
     )
     parser.add_argument(
+        "--quality", "-q",
+        choices=["draft", "normal", "fine", "ultra"],
+        default="normal",
+        help="STL mesh quality"
+    )
+    parser.add_argument(
         "--export-all",
         action="store_true",
         help="Export all variants"
@@ -184,10 +236,12 @@ def main():
             print(f"  {name:15} - {config.wheelbase}mm, {config.prop_size}\" props, {config.motor_size} motors")
         return
 
+    quality = STLQuality(args.quality)
     build_project(
         variant=args.variant,
         output_dir=args.output,
         export_all=args.export_all,
+        quality=quality,
     )
 
 

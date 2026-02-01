@@ -386,3 +386,139 @@ def test(ctx):
         raise SystemExit(1)
     else:
         click.echo("All tests passed!")
+
+
+@project.command("export")
+@click.argument("subproject")
+@click.argument("part", required=False)
+@click.option(
+    "--format", "-f",
+    type=click.Choice(["step", "stl", "both"]),
+    default="both",
+    help="Export format",
+)
+@click.option(
+    "--quality", "-q",
+    type=click.Choice(["draft", "normal", "fine", "ultra"]),
+    default="normal",
+    help="STL mesh quality",
+)
+@click.option("--output", "-o", type=click.Path(), help="Output directory")
+@click.pass_context
+def export_subproject(ctx, subproject, part, format, quality, output):
+    """Export sub-project parts to STEP/STL.
+
+    If PART is specified, exports just that part.
+    Otherwise, runs the project's build.py with --quality option.
+
+    Examples:
+
+        ./bin/dev project export quadcopter-5inch
+
+        ./bin/dev project export quadcopter-5inch --quality fine
+
+        ./bin/dev project export enclosure-test --format stl --quality ultra
+    """
+    import subprocess
+    import sys
+
+    proj = ctx.obj["project"]
+    subproject_dir = proj.projects_dir / subproject
+
+    if not subproject_dir.exists():
+        click.echo(f"Sub-project not found: {subproject}", err=True)
+        click.echo(f"Available: {proj.list_subprojects()}")
+        raise SystemExit(1)
+
+    # If output not specified, use project's output dir
+    output_dir = output if output else subproject_dir / "output"
+
+    # Run build.py with quality option
+    build_script = subproject_dir / "build.py"
+    if not build_script.exists():
+        click.echo(f"No build.py found in {subproject}", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"Exporting sub-project: {subproject}")
+    click.echo(f"  Quality: {quality}")
+    click.echo(f"  Format: {format}")
+    click.echo("=" * 50)
+
+    cmd = [sys.executable, str(build_script), "--quality", quality, "--output", str(output_dir)]
+
+    result = subprocess.run(cmd, cwd=str(subproject_dir))
+
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
+
+
+@project.command("bom")
+@click.argument("subproject")
+@click.option(
+    "--format", "-f",
+    type=click.Choice(["csv", "json", "md"]),
+    default="csv",
+    help="BOM output format",
+)
+@click.option("--output", "-o", type=click.Path(), help="Output file path")
+@click.pass_context
+def bom_subproject(ctx, subproject, format, output):
+    """Generate Bill of Materials for a sub-project.
+
+    Runs the project's build.py which generates BOM files.
+
+    Examples:
+
+        ./bin/dev project bom quadcopter-5inch
+
+        ./bin/dev project bom enclosure-test --format json
+    """
+    import subprocess
+    import sys
+
+    proj = ctx.obj["project"]
+    subproject_dir = proj.projects_dir / subproject
+
+    if not subproject_dir.exists():
+        click.echo(f"Sub-project not found: {subproject}", err=True)
+        click.echo(f"Available: {proj.list_subprojects()}")
+        raise SystemExit(1)
+
+    # Check for existing BOM files
+    output_dir = subproject_dir / "output"
+    bom_files = {
+        "csv": output_dir / "bom.csv",
+        "json": output_dir / "bom.json",
+        "md": output_dir / "bom.md",
+    }
+
+    bom_file = bom_files.get(format)
+
+    if bom_file and bom_file.exists():
+        # Display existing BOM
+        click.echo(f"BOM for {subproject} ({format}):")
+        click.echo("=" * 50)
+        click.echo(bom_file.read_text())
+    else:
+        # Need to build first
+        click.echo(f"BOM not found. Running build to generate...")
+
+        build_script = subproject_dir / "build.py"
+        if not build_script.exists():
+            click.echo(f"No build.py found in {subproject}", err=True)
+            raise SystemExit(1)
+
+        cmd = [sys.executable, str(build_script)]
+        result = subprocess.run(cmd, cwd=str(subproject_dir), capture_output=True, text=True)
+
+        if result.returncode != 0:
+            click.echo(f"Build failed: {result.stderr}", err=True)
+            raise SystemExit(result.returncode)
+
+        # Now display BOM
+        if bom_file and bom_file.exists():
+            click.echo(f"\nBOM for {subproject} ({format}):")
+            click.echo("=" * 50)
+            click.echo(bom_file.read_text())
+        else:
+            click.echo(f"BOM file not generated. Check build.py output.")

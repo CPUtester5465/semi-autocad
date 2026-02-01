@@ -8,11 +8,12 @@ Outputs:
 - body.step / body.stl       - Enclosure body
 - lid.step / lid.stl         - Enclosure lid
 - assembly.step / assembly.stl - Full assembly
-- bom.txt                     - Bill of materials
+- bom.csv / bom.json / bom.md  - Bill of materials
 
 Usage:
     python build.py
     python build.py --variant vented
+    python build.py --quality fine
     python build.py --export-all
 """
 
@@ -29,52 +30,62 @@ sys.path.insert(0, str(project_dir.parent.parent))
 from config import CONFIG, PRESETS, EnclosureConfig
 from frame import export_enclosure
 from assembly import create_assembly
+from semicad.export import STLQuality, BOM, BOMEntry, export_bom
 
 
-def generate_bom(config: EnclosureConfig) -> str:
-    """Generate bill of materials."""
-    bom = f"""
-BILL OF MATERIALS
-=================
-Project: enclosure-test
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+def generate_bom(config: EnclosureConfig) -> BOM:
+    """Generate bill of materials using semicad.export."""
+    entries = [
+        BOMEntry(
+            name="Enclosure Body",
+            quantity=1,
+            category="Enclosure",
+            description=f"{config.width}x{config.height}x{config.body_depth}mm, PETG, 3D Print (FDM)",
+        ),
+        BOMEntry(
+            name="Enclosure Lid",
+            quantity=1,
+            category="Enclosure",
+            description=f"{config.width}x{config.height}x{config.lid_height}mm, {config.lid_style} style, PETG",
+        ),
+    ]
 
-ENCLOSURE
----------
-- 1x Body
-  Dimensions: {config.width} x {config.height} x {config.body_depth} mm
-  Material: PETG
-  Process: 3D Print (FDM)
-
-- 1x Lid
-  Dimensions: {config.width} x {config.height} x {config.lid_height} mm
-  Style: {config.lid_style}
-  Material: PETG
-
-HARDWARE
---------
-"""
+    # Add hardware based on lid style
     if config.lid_style == "screw":
-        bom += "- 4x M3x8 Pan Head Screw (lid mounting)\n"
+        entries.append(BOMEntry(
+            name="M3x8 Pan Head Screw",
+            quantity=4,
+            category="Hardware",
+            description="Lid mounting",
+        ))
 
     if config.mount_holes:
-        bom += f"- 4x M{int(config.mount_hole_diameter)} mounting screws\n"
+        entries.append(BOMEntry(
+            name=f"M{int(config.mount_hole_diameter)} mounting screw",
+            quantity=4,
+            category="Hardware",
+            description="External mounting",
+        ))
 
-    bom += f"""
-SPECIFICATIONS
---------------
-- External: {config.width} x {config.height} x {config.depth} mm
-- Internal: {config.internal_width:.1f} x {config.internal_height:.1f} x {config.internal_depth:.1f} mm
+    # Build notes with specifications
+    notes = f"""Specifications:
+- External: {config.width}x{config.height}x{config.depth}mm
+- Internal: {config.internal_width:.1f}x{config.internal_height:.1f}x{config.internal_depth:.1f}mm
 - Wall thickness: {config.wall_thickness}mm
-- Corner radius: {config.corner_radius}mm
-"""
-    return bom
+- Corner radius: {config.corner_radius}mm"""
+
+    return BOM(
+        title="enclosure-test",
+        entries=entries,
+        notes=notes,
+    )
 
 
 def build_project(
     variant: str = "default",
     output_dir: Path | None = None,
     export_all: bool = False,
+    quality: STLQuality = STLQuality.NORMAL,
 ):
     """Build all project outputs."""
     if output_dir is None:
@@ -88,35 +99,41 @@ def build_project(
             print(f"{'='*50}")
             variant_dir = output_dir / name
             variant_dir.mkdir(exist_ok=True)
-            _build_variant(config, variant_dir, name)
+            _build_variant(config, variant_dir, name, quality)
     else:
         config = PRESETS.get(variant, CONFIG)
-        _build_variant(config, output_dir, variant)
+        _build_variant(config, output_dir, variant, quality)
 
 
-def _build_variant(config: EnclosureConfig, output_dir: Path, name: str):
+def _build_variant(
+    config: EnclosureConfig,
+    output_dir: Path,
+    name: str,
+    quality: STLQuality = STLQuality.NORMAL,
+):
     """Build a single variant."""
     print(f"\nConfiguration:")
     print(f"  External: {config.width} x {config.height} x {config.depth} mm")
     print(f"  Wall: {config.wall_thickness}mm")
     print(f"  Lid style: {config.lid_style}")
+    print(f"  Quality: {quality.value}")
 
     # Generate enclosure parts
     print("\nGenerating enclosure...")
-    export_enclosure(output_dir, config)
+    export_enclosure(output_dir, config, quality=quality)
 
     # Generate assembly
     print("\nGenerating assembly...")
     assembly = create_assembly(config)
-    assembly.export(output_dir)
+    assembly.export(output_dir, quality=quality)
 
-    # Generate BOM
+    # Generate BOM using semicad.export (export all formats)
     print("\nGenerating BOM...")
     bom = generate_bom(config)
-    bom_path = output_dir / "bom.txt"
-    with open(bom_path, "w") as f:
-        f.write(bom)
-    print(f"Exported: {bom_path}")
+    export_bom(bom, output_dir / "bom.csv")
+    export_bom(bom, output_dir / "bom.json")
+    export_bom(bom, output_dir / "bom.md")
+    print(f"Exported: bom.csv, bom.json, bom.md")
 
     # Summary
     print(f"\n{'='*50}")
@@ -146,6 +163,12 @@ def main():
         help="Output directory"
     )
     parser.add_argument(
+        "--quality", "-q",
+        choices=["draft", "normal", "fine", "ultra"],
+        default="normal",
+        help="STL mesh quality"
+    )
+    parser.add_argument(
         "--export-all",
         action="store_true",
         help="Export all variants"
@@ -164,10 +187,12 @@ def main():
             print(f"  {name:15} - {config.width}x{config.height}x{config.depth}mm, {config.lid_style} lid")
         return
 
+    quality = STLQuality(args.quality)
     build_project(
         variant=args.variant,
         output_dir=args.output,
         export_all=args.export_all,
+        quality=quality,
     )
 
 

@@ -6,6 +6,7 @@ Positions enclosure body and lid together.
 
 Usage:
     python assembly.py           # Export full assembly
+    python assembly.py --quality fine
     cq-editor assembly.py        # Interactive visualization
 """
 
@@ -21,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import CONFIG, EnclosureConfig
 from frame import generate_body, generate_lid
+from semicad.export import export_step, export_stl, STLQuality
 
 
 @dataclass
@@ -94,25 +96,30 @@ class EnclosureAssembly:
             combined = combined.union(comp.positioned)
         return combined
 
-    def export(self, output_dir: Path):
-        """Export assembly and individual parts to files."""
+    def export(self, output_dir: Path, quality: STLQuality = STLQuality.NORMAL):
+        """Export assembly and individual parts to files.
+
+        Args:
+            output_dir: Directory to write files
+            quality: STL mesh quality
+        """
         output_dir.mkdir(exist_ok=True)
 
         # Export combined assembly
         combined = self.get_combined()
-        cq.exporters.export(combined, str(output_dir / "assembly.step"))
-        cq.exporters.export(combined, str(output_dir / "assembly.stl"))
+        export_step(combined, output_dir / "assembly.step")
+        export_stl(combined, output_dir / "assembly.stl", quality=quality)
 
         # Export individual parts
         if self.body:
-            cq.exporters.export(self.body, str(output_dir / "body.step"))
-            cq.exporters.export(self.body, str(output_dir / "body.stl"))
+            export_step(self.body, output_dir / "body.step")
+            export_stl(self.body, output_dir / "body.stl", quality=quality)
 
         if self.lid:
-            cq.exporters.export(self.lid, str(output_dir / "lid.step"))
-            cq.exporters.export(self.lid, str(output_dir / "lid.stl"))
+            export_step(self.lid, output_dir / "lid.step")
+            export_stl(self.lid, output_dir / "lid.stl", quality=quality)
 
-        print(f"Exported to {output_dir}")
+        print(f"Exported to {output_dir} (quality: {quality.value})")
 
 
 def create_assembly(config: EnclosureConfig = CONFIG) -> EnclosureAssembly:

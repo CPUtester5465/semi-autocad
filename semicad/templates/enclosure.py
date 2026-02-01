@@ -347,21 +347,37 @@ def generate_enclosure(config: EnclosureConfig = CONFIG) -> tuple[cq.Workplane, 
     return generate_body(config), generate_lid(config)
 
 
-def export_enclosure(output_dir: Path, config: EnclosureConfig = CONFIG):
-    """Export enclosure parts to STEP and STL."""
+def export_enclosure(output_dir: Path, config: EnclosureConfig = CONFIG, quality: str = "normal"):
+    """Export enclosure parts to STEP and STL using semicad.export module.
+
+    Args:
+        output_dir: Directory for output files
+        config: EnclosureConfig parameters
+        quality: STL quality preset (draft, normal, fine, ultra)
+    """
+    from semicad.export import export_step, export_stl, STLQuality
+
     body, lid = generate_enclosure(config)
 
+    quality_map = {
+        "draft": STLQuality.DRAFT,
+        "normal": STLQuality.NORMAL,
+        "fine": STLQuality.FINE,
+        "ultra": STLQuality.ULTRA,
+    }
+    stl_quality = quality_map.get(quality, STLQuality.NORMAL)
+
     # Export body
-    cq.exporters.export(body, str(output_dir / "body.step"))
-    cq.exporters.export(body, str(output_dir / "body.stl"))
+    export_step(body, output_dir / "body.step")
+    export_stl(body, output_dir / "body.stl", quality=stl_quality)
     print(f"Exported: {output_dir / 'body.step'}")
-    print(f"Exported: {output_dir / 'body.stl'}")
+    print(f"Exported: {output_dir / 'body.stl'} (quality: {quality})")
 
     # Export lid
-    cq.exporters.export(lid, str(output_dir / "lid.step"))
-    cq.exporters.export(lid, str(output_dir / "lid.stl"))
+    export_step(lid, output_dir / "lid.step")
+    export_stl(lid, output_dir / "lid.stl", quality=stl_quality)
     print(f"Exported: {output_dir / 'lid.step'}")
-    print(f"Exported: {output_dir / 'lid.stl'}")
+    print(f"Exported: {output_dir / 'lid.stl'} (quality: {quality})")
 
     return body, lid
 
@@ -492,25 +508,40 @@ class EnclosureAssembly:
             combined = combined.union(comp.positioned)
         return combined
 
-    def export(self, output_dir: Path):
-        """Export assembly and individual parts to files."""
+    def export(self, output_dir: Path, quality: str = "normal"):
+        """Export assembly and individual parts using semicad.export module.
+
+        Args:
+            output_dir: Directory for output files
+            quality: STL quality preset (draft, normal, fine, ultra)
+        """
+        from semicad.export import export_step, export_stl, STLQuality
+
         output_dir.mkdir(exist_ok=True)
+
+        quality_map = {
+            "draft": STLQuality.DRAFT,
+            "normal": STLQuality.NORMAL,
+            "fine": STLQuality.FINE,
+            "ultra": STLQuality.ULTRA,
+        }
+        stl_quality = quality_map.get(quality, STLQuality.NORMAL)
 
         # Export combined assembly
         combined = self.get_combined()
-        cq.exporters.export(combined, str(output_dir / "assembly.step"))
-        cq.exporters.export(combined, str(output_dir / "assembly.stl"))
+        export_step(combined, output_dir / "assembly.step")
+        export_stl(combined, output_dir / "assembly.stl", quality=stl_quality)
 
         # Export individual parts
         if self.body:
-            cq.exporters.export(self.body, str(output_dir / "body.step"))
-            cq.exporters.export(self.body, str(output_dir / "body.stl"))
+            export_step(self.body, output_dir / "body.step")
+            export_stl(self.body, output_dir / "body.stl", quality=stl_quality)
 
         if self.lid:
-            cq.exporters.export(self.lid, str(output_dir / "lid.step"))
-            cq.exporters.export(self.lid, str(output_dir / "lid.stl"))
+            export_step(self.lid, output_dir / "lid.step")
+            export_stl(self.lid, output_dir / "lid.stl", quality=stl_quality)
 
-        print(f"Exported to {output_dir}")
+        print(f"Exported to {output_dir} (quality: {quality})")
 
 
 def create_assembly(config: EnclosureConfig = CONFIG) -> EnclosureAssembly:
@@ -562,17 +593,17 @@ Outputs:
 - body.step / body.stl       - Enclosure body
 - lid.step / lid.stl         - Enclosure lid
 - assembly.step / assembly.stl - Full assembly
-- bom.txt                     - Bill of materials
+- bom.csv / bom.json          - Bill of materials
 
 Usage:
     python build.py
     python build.py --variant vented
+    python build.py --quality fine
     python build.py --export-all
 """
 
 import argparse
 from pathlib import Path
-from datetime import datetime
 import sys
 
 # Setup paths
@@ -585,43 +616,59 @@ from frame import export_enclosure
 from assembly import create_assembly
 
 
-def generate_bom(config: EnclosureConfig) -> str:
-    """Generate bill of materials."""
-    bom = f"""
-BILL OF MATERIALS
-=================
-Project: $name
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+def generate_bom(config: EnclosureConfig, output_dir: Path):
+    """Generate bill of materials using semicad.export module."""
+    from semicad.export import BOM, BOMEntry, export_bom
 
-ENCLOSURE
----------
-- 1x Body
-  Dimensions: {config.width} x {config.height} x {config.body_depth} mm
-  Material: PETG
-  Process: 3D Print (FDM)
+    entries = [
+        BOMEntry(
+            name="Enclosure Body",
+            quantity=1,
+            category="enclosure",
+            source="custom",
+            description=f"{config.width}x{config.height}x{config.body_depth}mm",
+            params=f"wall={config.wall_thickness}mm, material=PETG",
+        ),
+        BOMEntry(
+            name="Enclosure Lid",
+            quantity=1,
+            category="enclosure",
+            source="custom",
+            description=f"{config.width}x{config.height}x{config.lid_height}mm, {config.lid_style}",
+        ),
+    ]
 
-- 1x Lid
-  Dimensions: {config.width} x {config.height} x {config.lid_height} mm
-  Style: {config.lid_style}
-  Material: PETG
-
-HARDWARE
---------
-"""
     if config.lid_style == "screw":
-        bom += "- 4x M3x8 Pan Head Screw (lid mounting)\\n"
+        entries.append(BOMEntry(
+            name="M3x8 Pan Head Screw",
+            quantity=4,
+            category="hardware",
+            source="cq_warehouse",
+            description="Lid mounting",
+        ))
 
     if config.mount_holes:
-        bom += f"- 4x M{int(config.mount_hole_diameter)} mounting screws\\n"
+        entries.append(BOMEntry(
+            name=f"M{int(config.mount_hole_diameter)} Mounting Screw",
+            quantity=4,
+            category="hardware",
+            source="cq_warehouse",
+            description="Base mounting",
+        ))
 
-    bom += f"""
-SPECIFICATIONS
---------------
-- External: {config.width} x {config.height} x {config.depth} mm
-- Internal: {config.internal_width:.1f} x {config.internal_height:.1f} x {config.internal_depth:.1f} mm
-- Wall thickness: {config.wall_thickness}mm
-- Corner radius: {config.corner_radius}mm
-"""
+    bom = BOM(
+        title="$name Bill of Materials",
+        entries=entries,
+        notes=f"External: {config.width}x{config.height}x{config.depth}mm, Internal: {config.internal_width:.1f}x{config.internal_height:.1f}x{config.internal_depth:.1f}mm",
+    )
+
+    # Export in multiple formats
+    export_bom(bom, output_dir / "bom.csv")
+    export_bom(bom, output_dir / "bom.json")
+
+    print(f"Exported: {output_dir / 'bom.csv'}")
+    print(f"Exported: {output_dir / 'bom.json'}")
+
     return bom
 
 
@@ -629,8 +676,16 @@ def build_project(
     variant: str = "default",
     output_dir: Path | None = None,
     export_all: bool = False,
+    quality: str = "normal",
 ):
-    """Build all project outputs."""
+    """Build all project outputs.
+
+    Args:
+        variant: Configuration preset name
+        output_dir: Output directory (default: project/output)
+        export_all: Export all variants
+        quality: STL mesh quality (draft, normal, fine, ultra)
+    """
     if output_dir is None:
         output_dir = project_dir / "output"
     output_dir.mkdir(exist_ok=True)
@@ -642,35 +697,32 @@ def build_project(
             print(f"{'='*50}")
             variant_dir = output_dir / name
             variant_dir.mkdir(exist_ok=True)
-            _build_variant(config, variant_dir, name)
+            _build_variant(config, variant_dir, name, quality)
     else:
         config = PRESETS.get(variant, CONFIG)
-        _build_variant(config, output_dir, variant)
+        _build_variant(config, output_dir, variant, quality)
 
 
-def _build_variant(config: EnclosureConfig, output_dir: Path, name: str):
+def _build_variant(config: EnclosureConfig, output_dir: Path, name: str, quality: str):
     """Build a single variant."""
     print(f"\\nConfiguration:")
     print(f"  External: {config.width} x {config.height} x {config.depth} mm")
     print(f"  Wall: {config.wall_thickness}mm")
     print(f"  Lid style: {config.lid_style}")
+    print(f"  Quality: {quality}")
 
     # Generate enclosure parts
     print("\\nGenerating enclosure...")
-    export_enclosure(output_dir, config)
+    export_enclosure(output_dir, config, quality=quality)
 
     # Generate assembly
     print("\\nGenerating assembly...")
     assembly = create_assembly(config)
-    assembly.export(output_dir)
+    assembly.export(output_dir, quality=quality)
 
     # Generate BOM
     print("\\nGenerating BOM...")
-    bom = generate_bom(config)
-    bom_path = output_dir / "bom.txt"
-    with open(bom_path, "w") as f:
-        f.write(bom)
-    print(f"Exported: {bom_path}")
+    generate_bom(config, output_dir)
 
     # Summary
     print(f"\\n{'='*50}")
@@ -700,6 +752,12 @@ def main():
         help="Output directory"
     )
     parser.add_argument(
+        "--quality", "-q",
+        choices=["draft", "normal", "fine", "ultra"],
+        default="normal",
+        help="STL mesh quality"
+    )
+    parser.add_argument(
         "--export-all",
         action="store_true",
         help="Export all variants"
@@ -722,6 +780,7 @@ def main():
         variant=args.variant,
         output_dir=args.output,
         export_all=args.export_all,
+        quality=args.quality,
     )
 
 

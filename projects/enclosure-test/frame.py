@@ -12,19 +12,21 @@ Design features:
 
 Usage:
     python frame.py              # Export STEP/STL
+    python frame.py --quality fine
     cq-editor frame.py           # Interactive view
 """
 
 import cadquery as cq
 from pathlib import Path
+import sys
 
-# Import config
-try:
-    from config import CONFIG, EnclosureConfig
-except ImportError:
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent))
-    from config import CONFIG, EnclosureConfig
+# Setup paths for imports
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(Path(__file__).parent))
+
+from config import CONFIG, EnclosureConfig
+from semicad.export import export_step, export_stl, STLQuality
 
 
 def generate_body(config: EnclosureConfig = CONFIG) -> cq.Workplane:
@@ -192,21 +194,31 @@ def generate_enclosure(config: EnclosureConfig = CONFIG) -> tuple[cq.Workplane, 
     return generate_body(config), generate_lid(config)
 
 
-def export_enclosure(output_dir: Path, config: EnclosureConfig = CONFIG):
-    """Export enclosure parts to STEP and STL."""
+def export_enclosure(
+    output_dir: Path,
+    config: EnclosureConfig = CONFIG,
+    quality: STLQuality = STLQuality.NORMAL,
+):
+    """Export enclosure parts to STEP and STL.
+
+    Args:
+        output_dir: Directory to write files
+        config: Enclosure configuration
+        quality: STL mesh quality
+    """
     body, lid = generate_enclosure(config)
 
     # Export body
-    cq.exporters.export(body, str(output_dir / "body.step"))
-    cq.exporters.export(body, str(output_dir / "body.stl"))
+    export_step(body, output_dir / "body.step")
+    export_stl(body, output_dir / "body.stl", quality=quality)
     print(f"Exported: {output_dir / 'body.step'}")
-    print(f"Exported: {output_dir / 'body.stl'}")
+    print(f"Exported: {output_dir / 'body.stl'} (quality: {quality.value})")
 
     # Export lid
-    cq.exporters.export(lid, str(output_dir / "lid.step"))
-    cq.exporters.export(lid, str(output_dir / "lid.stl"))
+    export_step(lid, output_dir / "lid.step")
+    export_stl(lid, output_dir / "lid.stl", quality=quality)
     print(f"Exported: {output_dir / 'lid.step'}")
-    print(f"Exported: {output_dir / 'lid.stl'}")
+    print(f"Exported: {output_dir / 'lid.stl'} (quality: {quality.value})")
 
     return body, lid
 
@@ -229,13 +241,31 @@ except NameError:
 
 # CLI execution
 if __name__ == "__main__":
-    output_dir = Path(__file__).parent / "output"
-    output_dir.mkdir(exist_ok=True)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate enclosure parts")
+    parser.add_argument(
+        "--quality", "-q",
+        choices=["draft", "normal", "fine", "ultra"],
+        default="normal",
+        help="STL mesh quality"
+    )
+    parser.add_argument(
+        "--output", "-o",
+        type=Path,
+        default=Path(__file__).parent / "output",
+        help="Output directory"
+    )
+    args = parser.parse_args()
+
+    args.output.mkdir(exist_ok=True)
+    quality = STLQuality(args.quality)
 
     print(f"Generating enclosure-test enclosure...")
     print(f"  External: {CONFIG.width} x {CONFIG.height} x {CONFIG.depth} mm")
     print(f"  Internal: {CONFIG.internal_width:.1f} x {CONFIG.internal_height:.1f} x {CONFIG.internal_depth:.1f} mm")
     print(f"  Wall thickness: {CONFIG.wall_thickness}mm")
     print(f"  Lid style: {CONFIG.lid_style}")
+    print(f"  Quality: {quality.value}")
 
-    export_enclosure(output_dir, CONFIG)
+    export_enclosure(args.output, CONFIG, quality=quality)

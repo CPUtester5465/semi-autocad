@@ -12,21 +12,22 @@ Design features:
 
 Usage:
     python frame.py              # Export STEP/STL
+    python frame.py --quality fine
     cq-editor frame.py           # Interactive view
 """
 
 import cadquery as cq
 import math
 from pathlib import Path
+import sys
 
-# Import config
-try:
-    from config import CONFIG, QuadConfig
-except ImportError:
-    # Running standalone
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent))
-    from config import CONFIG, QuadConfig
+# Setup paths for imports
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(Path(__file__).parent))
+
+from config import CONFIG, QuadConfig
+from semicad.export import export_step, export_stl, STLQuality
 
 
 def generate_frame(config: QuadConfig = CONFIG) -> cq.Workplane:
@@ -130,18 +131,28 @@ def generate_frame_with_chamfers(config: QuadConfig = CONFIG) -> cq.Workplane:
 
 
 # === Export Functions ===
-def export_frame(output_dir: Path, config: QuadConfig = CONFIG):
-    """Export frame to STEP and STL."""
+def export_frame(
+    output_dir: Path,
+    config: QuadConfig = CONFIG,
+    quality: STLQuality = STLQuality.NORMAL,
+):
+    """Export frame to STEP and STL.
+
+    Args:
+        output_dir: Directory to write files
+        config: Frame configuration
+        quality: STL mesh quality (draft, normal, fine, ultra)
+    """
     frame = generate_frame(config)
 
     step_path = output_dir / "frame.step"
     stl_path = output_dir / "frame.stl"
 
-    cq.exporters.export(frame, str(step_path))
-    cq.exporters.export(frame, str(stl_path))
+    export_step(frame, step_path)
+    export_stl(frame, stl_path, quality=quality)
 
     print(f"Exported: {step_path}")
-    print(f"Exported: {stl_path}")
+    print(f"Exported: {stl_path} (quality: {quality.value})")
 
     return frame
 
@@ -159,16 +170,34 @@ except NameError:
 
 # CLI execution
 if __name__ == "__main__":
-    output_dir = Path(__file__).parent / "output"
-    output_dir.mkdir(exist_ok=True)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate quadcopter frame")
+    parser.add_argument(
+        "--quality", "-q",
+        choices=["draft", "normal", "fine", "ultra"],
+        default="normal",
+        help="STL mesh quality"
+    )
+    parser.add_argument(
+        "--output", "-o",
+        type=Path,
+        default=Path(__file__).parent / "output",
+        help="Output directory"
+    )
+    args = parser.parse_args()
+
+    args.output.mkdir(exist_ok=True)
+    quality = STLQuality(args.quality)
 
     print(f"Generating {CONFIG.wheelbase}mm quadcopter frame...")
     print(f"  Arm length: {CONFIG.arm_length:.1f}mm")
     print(f"  Arm width: {CONFIG.arm_width}mm")
     print(f"  Thickness: {CONFIG.arm_thickness}mm")
+    print(f"  Quality: {quality.value}")
 
     # Check prop clearance
     ok, clearance = CONFIG.check_prop_clearance()
     print(f"  Prop clearance: {clearance:.1f}mm {'✓' if ok else '⚠ TOO CLOSE'}")
 
-    export_frame(output_dir, CONFIG)
+    export_frame(args.output, CONFIG, quality=quality)

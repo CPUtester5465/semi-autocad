@@ -46,9 +46,18 @@ def build(ctx, output):
 @click.argument("input_file", type=click.Path(exists=True))
 @click.option("--output", "-o", type=click.Path(), help="Output PNG file")
 @click.option("--resolution", "-r", default="1024x768", help="Resolution (WxH)")
+@click.option(
+    "--method",
+    "-m",
+    type=click.Choice(["trimesh", "blender"]),
+    default="trimesh",
+    help="Rendering method",
+)
 @click.pass_context
-def render(ctx, input_file, output, resolution):
+def render(ctx, input_file, output, resolution, method):
     """Render STL/STEP to PNG image."""
+    from semicad.export import render_stl_to_png, render_stl_to_png_blender
+
     project = ctx.obj["project"]
 
     input_path = Path(input_file)
@@ -59,41 +68,58 @@ def render(ctx, input_file, output, resolution):
 
     width, height = map(int, resolution.split("x"))
 
-    click.echo(f"Rendering {input_path.name} to PNG...")
+    click.echo(f"Rendering {input_path.name} to PNG ({method})...")
 
-    try:
-        import trimesh
+    if method == "blender":
+        result = render_stl_to_png_blender(input_path, output_path, resolution=max(width, height))
+    else:
+        result = render_stl_to_png(input_path, output_path, width=width, height=height)
 
-        mesh = trimesh.load(str(input_path))
-        scene = mesh.scene()
-        png = scene.save_image(resolution=[width, height])
-
-        with open(output_path, "wb") as f:
-            f.write(png)
-
-        click.echo(f"Saved to: {output_path}")
-
-    except ImportError:
-        click.echo("trimesh not installed. Run: pip install trimesh", err=True)
-        raise SystemExit(1)
-    except Exception as e:
-        click.echo(f"Render failed: {e}", err=True)
+    if result:
+        click.echo(f"Saved to: {result}")
+    else:
+        click.echo("Render failed. Check error messages above.", err=True)
         raise SystemExit(1)
 
 
 @click.command()
 @click.argument("component")
-@click.option("--format", "-f", type=click.Choice(["step", "stl", "both"]), default="both")
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(["step", "stl", "both"]),
+    default="both",
+    help="Export format",
+)
 @click.option("--output", "-o", type=click.Path(), help="Output directory")
+@click.option(
+    "--quality",
+    "-q",
+    type=click.Choice(["draft", "normal", "fine", "ultra"]),
+    default="normal",
+    help="STL mesh quality",
+)
+@click.option("--tolerance", "-t", type=float, help="Override STL linear tolerance")
+@click.option("--angular-tolerance", type=float, help="Override STL angular tolerance")
 @click.pass_context
-def export(ctx, component, format, output):
+def export(ctx, component, format, output, quality, tolerance, angular_tolerance):
     """Export a component to STEP/STL."""
     from semicad.core.registry import get_registry
-    import cadquery as cq
+    from semicad.export import export_step, export_stl, STLQuality
 
     project = ctx.obj["project"]
     output_dir = Path(output) if output else project.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
     registry = get_registry()
+
+    # Map quality string to enum
+    quality_map = {
+        "draft": STLQuality.DRAFT,
+        "normal": STLQuality.NORMAL,
+        "fine": STLQuality.FINE,
+        "ultra": STLQuality.ULTRA,
+    }
+    stl_quality = quality_map[quality]
 
     click.echo(f"Exporting component: {component}")
 
@@ -103,13 +129,19 @@ def export(ctx, component, format, output):
 
         if format in ("step", "both"):
             step_file = output_dir / f"{comp.name}.step"
-            cq.exporters.export(geometry, str(step_file))
+            export_step(geometry, step_file)
             click.echo(f"  STEP: {step_file}")
 
         if format in ("stl", "both"):
             stl_file = output_dir / f"{comp.name}.stl"
-            cq.exporters.export(geometry, str(stl_file))
-            click.echo(f"  STL: {stl_file}")
+            export_stl(
+                geometry,
+                stl_file,
+                quality=stl_quality,
+                tolerance=tolerance,
+                angular_tolerance=angular_tolerance,
+            )
+            click.echo(f"  STL: {stl_file} (quality: {quality})")
 
     except KeyError as e:
         click.echo(f"Component not found: {e}", err=True)
