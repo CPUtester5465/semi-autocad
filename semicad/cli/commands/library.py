@@ -135,3 +135,88 @@ def search(query, source):
 
     if len(results) > 20:
         click.echo(f"\n  ... and {len(results) - 20} more results")
+
+
+@lib.command("validate")
+@click.argument("component")
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed output")
+@click.option("--max-size", type=float, default=2000.0, help="Max dimension warning threshold (mm)")
+@click.option("--min-size", type=float, default=0.01, help="Min dimension warning threshold (mm)")
+def validate(component, verbose, max_size, min_size):
+    """
+    Validate component geometry.
+
+    Checks:
+    - Geometry is valid (no self-intersections)
+    - Bounding box reasonable
+    - Has expected features (solids, faces)
+
+    Example:
+        ./bin/dev lib validate motor_2207
+    """
+    from semicad.core.registry import get_registry
+    from semicad.core.validation import IssueSeverity
+
+    registry = get_registry()
+
+    click.echo(f"\nValidating: {component}")
+    click.echo("=" * 50)
+
+    try:
+        comp = registry.get(component)
+    except KeyError:
+        click.echo(f"Component not found: {component}", err=True)
+        raise SystemExit(1)
+
+    # Run validation
+    result = comp.validate(max_dimension=max_size, min_dimension=min_size)
+
+    # Display results
+    if result.is_valid:
+        click.echo(click.style("\n\u2713 Geometry is valid", fg="green"))
+    else:
+        click.echo(click.style("\n\u2717 Validation failed", fg="red"))
+
+    # Show metrics
+    if result.bbox_size:
+        x, y, z = result.bbox_size
+        click.echo(f"  Bounding box: {x:.1f} x {y:.1f} x {z:.1f} mm")
+
+    if result.solid_count > 0:
+        click.echo(f"  Solids: {result.solid_count}")
+
+    if result.face_count > 0:
+        click.echo(f"  Faces: {result.face_count}")
+
+    # Show issues
+    if result.issues:
+        click.echo("\nIssues:")
+        for issue in result.issues:
+            if issue.severity == IssueSeverity.ERROR:
+                prefix = click.style("  \u2717 ERROR", fg="red")
+            elif issue.severity == IssueSeverity.WARNING:
+                prefix = click.style("  \u26a0 WARNING", fg="yellow")
+            else:
+                prefix = click.style("  \u2139 INFO", fg="blue")
+
+            click.echo(f"{prefix}: {issue.code} - {issue.message}")
+
+            if verbose and issue.details:
+                for k, v in issue.details.items():
+                    click.echo(f"      {k}: {v}")
+
+    # Summary
+    click.echo("")
+    if result.error_count > 0 or result.warning_count > 0:
+        summary_parts = []
+        if result.error_count > 0:
+            summary_parts.append(click.style(f"{result.error_count} error(s)", fg="red"))
+        if result.warning_count > 0:
+            summary_parts.append(click.style(f"{result.warning_count} warning(s)", fg="yellow"))
+        click.echo(", ".join(summary_parts))
+    else:
+        click.echo(click.style("No issues found.", fg="green"))
+
+    # Exit with error if validation failed
+    if not result.is_valid:
+        raise SystemExit(1)

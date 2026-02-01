@@ -9,8 +9,11 @@ A Component is any CAD part that can be:
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable, TYPE_CHECKING
 import cadquery as cq
+
+if TYPE_CHECKING:
+    from semicad.core.validation import ValidationResult
 
 
 @dataclass
@@ -68,6 +71,62 @@ class Component(ABC):
         if self._geometry is None:
             self._geometry = self.build()
         return self._geometry
+
+    def validate(
+        self,
+        max_dimension: float | None = None,
+        min_dimension: float | None = None,
+    ) -> "ValidationResult":
+        """
+        Validate the component geometry.
+
+        Performs checks including:
+        - Geometry builds successfully
+        - Geometry contains solid bodies
+        - OCC shape validity
+        - Bounding box sanity checks
+
+        Args:
+            max_dimension: Maximum allowed dimension in mm (default: 2000)
+            min_dimension: Minimum allowed dimension in mm (default: 0.01)
+
+        Returns:
+            ValidationResult with issues and metrics
+        """
+        from semicad.core.validation import (
+            ValidationResult,
+            ValidationIssue,
+            IssueSeverity,
+            validate_geometry,
+            MAX_DIMENSION,
+            MIN_DIMENSION,
+        )
+
+        # Use defaults if not specified
+        if max_dimension is None:
+            max_dimension = MAX_DIMENSION
+        if min_dimension is None:
+            min_dimension = MIN_DIMENSION
+
+        try:
+            geom = self.geometry  # This triggers build() if needed
+            return validate_geometry(
+                geom,
+                self.name,
+                max_dimension=max_dimension,
+                min_dimension=min_dimension,
+            )
+        except Exception as e:
+            # Build failed
+            return ValidationResult(
+                component_name=self.name,
+                is_valid=False,
+                issues=[ValidationIssue(
+                    severity=IssueSeverity.ERROR,
+                    code="BUILD_FAILED",
+                    message=f"Failed to build geometry: {e}",
+                )],
+            )
 
     def translate(self, x: float = 0, y: float = 0, z: float = 0) -> "Component":
         """Return a translated copy of this component."""
