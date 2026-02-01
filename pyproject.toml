@@ -19,6 +19,10 @@ dev = [
     "trimesh",
     "pyglet<2",
 ]
+test = [
+    "pytest>=7.0",
+    "pytest-cov",
+]
 warehouse = [
     "cq-warehouse",
 ]
@@ -29,7 +33,7 @@ partcad = [
     "partcad",
 ]
 all = [
-    "semicad[dev,warehouse,electronics,partcad]",
+    "semicad[dev,test,warehouse,electronics,partcad]",
 ]
 
 [project.scripts]
