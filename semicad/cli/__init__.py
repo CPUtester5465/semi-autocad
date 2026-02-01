@@ -19,10 +19,14 @@ import semicad
 # Create main CLI group
 @click.group(invoke_without_command=True)
 @click.option("--project", "-p", type=click.Path(exists=True), help="Project root directory")
+@click.option("--json", "json_output", is_flag=True, help="Output in JSON format for scripting")
 @click.pass_context
-def cli(ctx, project):
+def cli(ctx, project, json_output):
     """Semi-AutoCAD - AI-assisted CAD design system."""
     ctx.ensure_object(dict)
+
+    # Store JSON output preference in context
+    ctx.obj["json_output"] = json_output
 
     # Show help if no command given
     if ctx.invoked_subcommand is None:

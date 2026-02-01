@@ -2,6 +2,8 @@
 Library commands - Browse and search component libraries.
 """
 
+import json
+
 import click
 
 
@@ -14,20 +16,20 @@ def lib():
 @lib.command("list")
 @click.option("--source", "-s", help="Filter by source (custom, cq_warehouse, etc.)")
 @click.option("--category", "-c", help="Filter by category")
-def list_libs(source, category):
+@click.pass_context
+def list_libs(ctx, source, category):
     """List available components."""
     from semicad.core.registry import get_registry
 
     registry = get_registry()
+    json_output = ctx.obj.get("json_output", False)
 
-    click.echo("Component Libraries:")
-    click.echo("=" * 50)
+    # Build data structure
+    data = {"sources": {}}
 
     for src_name in registry.sources:
         if source and src_name != source:
             continue
-
-        click.echo(f"\n{src_name}:")
 
         components = list(registry.list_from(src_name))
         if category:
@@ -38,46 +40,74 @@ def list_libs(source, category):
         for comp in components:
             by_category.setdefault(comp.category, []).append(comp)
 
-        for cat, comps in sorted(by_category.items()):
-            click.echo(f"  {cat}:")
-            for comp in comps[:10]:  # Limit display
-                click.echo(f"    - {comp.name}")
-            if len(comps) > 10:
-                click.echo(f"    ... and {len(comps) - 10} more")
+        data["sources"][src_name] = {
+            cat: [comp.name for comp in comps]
+            for cat, comps in sorted(by_category.items())
+        }
+
+    if json_output:
+        click.echo(json.dumps(data, indent=2))
+    else:
+        click.echo("Component Libraries:")
+        click.echo("=" * 50)
+
+        for src_name, categories in data["sources"].items():
+            click.echo(f"\n{src_name}:")
+            for cat, comps in categories.items():
+                click.echo(f"  {cat}:")
+                for comp in comps[:10]:  # Limit display
+                    click.echo(f"    - {comp}")
+                if len(comps) > 10:
+                    click.echo(f"    ... and {len(comps) - 10} more")
 
 
 @lib.command("info")
 @click.argument("component")
-def info(component):
+@click.pass_context
+def info(ctx, component):
     """Show detailed info about a component."""
     from semicad.core.registry import get_registry
 
     registry = get_registry()
+    json_output = ctx.obj.get("json_output", False)
 
     try:
         # Use get_spec() to avoid requiring params for parametric components
         spec = registry.get_spec(component)
 
-        click.echo(f"Component: {spec.name}")
-        click.echo(f"  Source: {spec.source}")
-        click.echo(f"  Category: {spec.category}")
-        click.echo(f"  Description: {spec.description}")
+        data = {
+            "name": spec.name,
+            "source": spec.source,
+            "category": spec.category,
+            "description": spec.description,
+            "full_name": spec.full_name,
+            "params": spec.params,
+            "metadata": spec.metadata if spec.metadata else None,
+        }
 
-        if spec.params:
-            # Handle structured params (required/defaults) from electronics source
-            if "required" in spec.params:
-                required = spec.params["required"]
-                click.echo(f"  Required parameters: {', '.join(required)}")
-            if "defaults" in spec.params:
-                defaults = spec.params["defaults"]
-                click.echo("  Default parameters:")
-                for k, v in defaults.items():
-                    click.echo(f"    {k}: {v}")
-            # Handle simple params dict (from custom/warehouse sources)
-            if "required" not in spec.params and "defaults" not in spec.params:
-                click.echo("  Parameters:")
-                for k, v in spec.params.items():
-                    click.echo(f"    {k}: {v}")
+        if json_output:
+            click.echo(json.dumps(data, indent=2))
+        else:
+            click.echo(f"Component: {spec.name}")
+            click.echo(f"  Source: {spec.source}")
+            click.echo(f"  Category: {spec.category}")
+            click.echo(f"  Description: {spec.description}")
+
+            if spec.params:
+                # Handle structured params (required/defaults) from electronics source
+                if "required" in spec.params:
+                    required = spec.params["required"]
+                    click.echo(f"  Required parameters: {', '.join(required)}")
+                if "defaults" in spec.params:
+                    defaults = spec.params["defaults"]
+                    click.echo("  Default parameters:")
+                    for k, v in defaults.items():
+                        click.echo(f"    {k}: {v}")
+                # Handle simple params dict (from custom/warehouse sources)
+                if "required" not in spec.params and "defaults" not in spec.params:
+                    click.echo("  Parameters:")
+                    for k, v in spec.params.items():
+                        click.echo(f"    {k}: {v}")
 
     except KeyError:
         click.echo(f"Component not found: {component}", err=True)
@@ -86,182 +116,271 @@ def info(component):
 
 @lib.command("fasteners")
 @click.option("--type", "-t", "fastener_type", default="SocketHeadCapScrew", help="Fastener type")
-def fasteners(fastener_type):
+@click.pass_context
+def fasteners(ctx, fastener_type):
     """List available fastener sizes."""
     from semicad.sources.warehouse import WarehouseSource
 
     source = WarehouseSource()
-
-    click.echo(f"Fastener: {fastener_type}")
-    click.echo("Available sizes:")
+    json_output = ctx.obj.get("json_output", False)
 
     sizes = source.list_fastener_sizes(fastener_type)
-    for size in sizes:
-        click.echo(f"  {size}")
 
-    click.echo(f"\nExample usage:")
-    click.echo(f'  registry.get("{fastener_type}", size="M3-0.5", length=10)')
+    data = {
+        "fastener_type": fastener_type,
+        "sizes": sizes,
+        "example": f'registry.get("{fastener_type}", size="M3-0.5", length=10)',
+    }
+
+    if json_output:
+        click.echo(json.dumps(data, indent=2))
+    else:
+        click.echo(f"Fastener: {fastener_type}")
+        click.echo("Available sizes:")
+
+        for size in sizes:
+            click.echo(f"  {size}")
+
+        click.echo(f"\nExample usage:")
+        click.echo(f'  registry.get("{fastener_type}", size="M3-0.5", length=10)')
 
 
 @lib.command("bearings")
-def bearings():
+@click.pass_context
+def bearings(ctx):
     """List available bearing sizes."""
     from semicad.sources.warehouse import WarehouseSource
 
     source = WarehouseSource()
-
-    click.echo("Deep Groove Ball Bearings:")
-    click.echo("Available sizes:")
+    json_output = ctx.obj.get("json_output", False)
 
     sizes = source.list_bearing_sizes()
-    for size in sizes[:20]:
-        click.echo(f"  {size}")
 
-    if len(sizes) > 20:
-        click.echo(f"  ... and {len(sizes) - 20} more")
+    data = {
+        "type": "Deep Groove Ball Bearings",
+        "sizes": sizes,
+        "total": len(sizes),
+    }
+
+    if json_output:
+        click.echo(json.dumps(data, indent=2))
+    else:
+        click.echo("Deep Groove Ball Bearings:")
+        click.echo("Available sizes:")
+
+        for size in sizes[:20]:
+            click.echo(f"  {size}")
+
+        if len(sizes) > 20:
+            click.echo(f"  ... and {len(sizes) - 20} more")
 
 
 @lib.command("electronics")
-def electronics():
+@click.pass_context
+def electronics(ctx):
     """List all electronics components by category."""
     from semicad.sources.electronics import ElectronicsSource
 
     source = ElectronicsSource()
-
-    click.echo("Electronics Components (cq_electronics):")
-    click.echo("=" * 50)
+    json_output = ctx.obj.get("json_output", False)
 
     categories = source.list_categories()
-    if not categories:
-        click.echo("  No electronics components available.")
-        click.echo("  (cq_electronics may not be installed)")
-        return
 
+    # Build data structure
+    data = {"categories": {}}
     for category in categories:
-        click.echo(f"\n{category}:")
-        for spec in source.list_by_category(category):
-            # Show required params if any
-            required = spec.params.get("required", [])
-            if required:
-                params_str = f" (required: {', '.join(required)})"
-            else:
-                params_str = ""
-            click.echo(f"  - {spec.name}{params_str}")
-            if spec.description:
-                click.echo(f"      {spec.description}")
+        data["categories"][category] = [
+            {
+                "name": spec.name,
+                "description": spec.description,
+                "required_params": spec.params.get("required", []),
+                "default_params": spec.params.get("defaults", {}),
+            }
+            for spec in source.list_by_category(category)
+        ]
 
-    click.echo("\nUse 'lib boards' or 'lib connectors' for detailed specs.")
+    if json_output:
+        click.echo(json.dumps(data, indent=2))
+    else:
+        click.echo("Electronics Components (cq_electronics):")
+        click.echo("=" * 50)
+
+        if not categories:
+            click.echo("  No electronics components available.")
+            click.echo("  (cq_electronics may not be installed)")
+            return
+
+        for category in categories:
+            click.echo(f"\n{category}:")
+            for spec in source.list_by_category(category):
+                # Show required params if any
+                required = spec.params.get("required", [])
+                if required:
+                    params_str = f" (required: {', '.join(required)})"
+                else:
+                    params_str = ""
+                click.echo(f"  - {spec.name}{params_str}")
+                if spec.description:
+                    click.echo(f"      {spec.description}")
+
+        click.echo("\nUse 'lib boards' or 'lib connectors' for detailed specs.")
 
 
 @lib.command("boards")
-def boards():
+@click.pass_context
+def boards(ctx):
     """List available board components with dimensions."""
     from semicad.sources.electronics import ElectronicsSource
 
     source = ElectronicsSource()
-
-    click.echo("Electronic Boards:")
-    click.echo("=" * 50)
+    json_output = ctx.obj.get("json_output", False)
 
     board_list = source.list_boards()
-    if not board_list:
-        click.echo("  No boards available.")
-        return
 
-    for board in board_list:
-        click.echo(f"\n{board['name']}:")
-        click.echo(f"  {board.get('description', '')}")
+    if json_output:
+        data = {
+            "boards": board_list,
+            "total": len(board_list),
+            "example": 'registry.get("RPi3b")',
+        }
+        click.echo(json.dumps(data, indent=2))
+    else:
+        click.echo("Electronic Boards:")
+        click.echo("=" * 50)
 
-        # Dimensions
-        width = board.get("width")
-        height = board.get("height")
-        thickness = board.get("thickness")
-        if width and height:
-            dims = f"  Dimensions: {width} x {height}"
-            if thickness:
-                dims += f" x {thickness}"
-            dims += " mm"
-            click.echo(dims)
+        if not board_list:
+            click.echo("  No boards available.")
+            return
 
-        # Mounting holes
-        hole_dia = board.get("hole_diameter")
-        if hole_dia:
-            click.echo(f"  Mounting holes: M{hole_dia:.1f}")
+        for board in board_list:
+            click.echo(f"\n{board['name']}:")
+            click.echo(f"  {board.get('description', '')}")
 
-        hole_spacing = board.get("hole_centers_long")
-        hole_offset = board.get("hole_offset_from_edge")
-        if hole_spacing and hole_offset:
-            click.echo(f"  Hole spacing: {hole_spacing}mm (long), offset {hole_offset}mm from edge")
+            # Dimensions
+            width = board.get("width")
+            height = board.get("height")
+            thickness = board.get("thickness")
+            if width and height:
+                dims = f"  Dimensions: {width} x {height}"
+                if thickness:
+                    dims += f" x {thickness}"
+                dims += " mm"
+                click.echo(dims)
 
-    click.echo(f"\nExample usage:")
-    click.echo('  registry.get("RPi3b")')
+            # Mounting holes
+            hole_dia = board.get("hole_diameter")
+            if hole_dia:
+                click.echo(f"  Mounting holes: M{hole_dia:.1f}")
+
+            hole_spacing = board.get("hole_centers_long")
+            hole_offset = board.get("hole_offset_from_edge")
+            if hole_spacing and hole_offset:
+                click.echo(f"  Hole spacing: {hole_spacing}mm (long), offset {hole_offset}mm from edge")
+
+        click.echo(f"\nExample usage:")
+        click.echo('  registry.get("RPi3b")')
 
 
 @lib.command("connectors")
-def connectors():
+@click.pass_context
+def connectors(ctx):
     """List available connector components with specs."""
     from semicad.sources.electronics import ElectronicsSource
 
     source = ElectronicsSource()
-
-    click.echo("Electronic Connectors:")
-    click.echo("=" * 50)
+    json_output = ctx.obj.get("json_output", False)
 
     connector_list = source.list_connectors()
-    if not connector_list:
-        click.echo("  No connectors available.")
-        return
 
-    for conn in connector_list:
-        click.echo(f"\n{conn['name']}:")
-        click.echo(f"  {conn.get('description', '')}")
+    if json_output:
+        data = {
+            "connectors": connector_list,
+            "total": len(connector_list),
+            "examples": [
+                'registry.get("PinHeader", rows=2, columns=20)',
+                'registry.get("JackSurfaceMount")',
+            ],
+        }
+        click.echo(json.dumps(data, indent=2))
+    else:
+        click.echo("Electronic Connectors:")
+        click.echo("=" * 50)
 
-        # Show pitch if available
-        pitch = conn.get("pitch")
-        if pitch:
-            click.echo(f"  Pitch: {pitch}mm")
+        if not connector_list:
+            click.echo("  No connectors available.")
+            return
 
-        # Show required params
-        required = conn.get("required_params", [])
-        if required:
-            click.echo(f"  Required params: {', '.join(required)}")
+        for conn in connector_list:
+            click.echo(f"\n{conn['name']}:")
+            click.echo(f"  {conn.get('description', '')}")
 
-        # Show defaults
-        defaults = conn.get("default_params", {})
-        if defaults:
-            defaults_str = ", ".join(f"{k}={v}" for k, v in defaults.items())
-            click.echo(f"  Defaults: {defaults_str}")
+            # Show pitch if available
+            pitch = conn.get("pitch")
+            if pitch:
+                click.echo(f"  Pitch: {pitch}mm")
 
-    click.echo(f"\nExample usage:")
-    click.echo('  registry.get("PinHeader", rows=2, columns=20)')
-    click.echo('  registry.get("JackSurfaceMount")')
+            # Show required params
+            required = conn.get("required_params", [])
+            if required:
+                click.echo(f"  Required params: {', '.join(required)}")
+
+            # Show defaults
+            defaults = conn.get("default_params", {})
+            if defaults:
+                defaults_str = ", ".join(f"{k}={v}" for k, v in defaults.items())
+                click.echo(f"  Defaults: {defaults_str}")
+
+        click.echo(f"\nExample usage:")
+        click.echo('  registry.get("PinHeader", rows=2, columns=20)')
+        click.echo('  registry.get("JackSurfaceMount")')
 
 
 @click.command()
 @click.argument("query")
 @click.option("--source", "-s", help="Search specific source only")
-def search(query, source):
+@click.pass_context
+def search(ctx, query, source):
     """Search for components by name or description."""
     from semicad.core.registry import get_registry
 
     registry = get_registry()
-
-    click.echo(f"Searching for: {query}")
-    click.echo("-" * 40)
+    json_output = ctx.obj.get("json_output", False)
 
     results = list(registry.search(query, source))
 
-    if not results:
-        click.echo("No components found.")
-        return
+    data = {
+        "query": query,
+        "source_filter": source,
+        "total": len(results),
+        "results": [
+            {
+                "name": spec.name,
+                "source": spec.source,
+                "category": spec.category,
+                "description": spec.description,
+                "full_name": spec.full_name,
+            }
+            for spec in results
+        ],
+    }
 
-    for spec in results[:20]:
-        click.echo(f"  [{spec.source}] {spec.name}")
-        if spec.description:
-            click.echo(f"      {spec.description}")
+    if json_output:
+        click.echo(json.dumps(data, indent=2))
+    else:
+        click.echo(f"Searching for: {query}")
+        click.echo("-" * 40)
 
-    if len(results) > 20:
-        click.echo(f"\n  ... and {len(results) - 20} more results")
+        if not results:
+            click.echo("No components found.")
+            return
+
+        for spec in results[:20]:
+            click.echo(f"  [{spec.source}] {spec.name}")
+            if spec.description:
+                click.echo(f"      {spec.description}")
+
+        if len(results) > 20:
+            click.echo(f"\n  ... and {len(results) - 20} more results")
 
 
 def parse_validate_param(value):
@@ -299,7 +418,8 @@ def parse_validate_param(value):
     multiple=True,
     help="Component parameter as KEY=VALUE (can be repeated)",
 )
-def validate(component, verbose, max_size, min_size, param):
+@click.pass_context
+def validate(ctx, component, verbose, max_size, min_size, param):
     """
     Validate component geometry.
 
@@ -319,14 +439,10 @@ def validate(component, verbose, max_size, min_size, param):
     from semicad.core.validation import IssueSeverity
 
     registry = get_registry()
+    json_output = ctx.obj.get("json_output", False)
 
     # Parse component parameters
     comp_params = parse_validate_param(param)
-
-    click.echo(f"\nValidating: {component}")
-    if comp_params:
-        click.echo(f"Parameters: {comp_params}")
-    click.echo("=" * 50)
 
     try:
         comp = registry.get(component, **comp_params)
@@ -350,51 +466,84 @@ def validate(component, verbose, max_size, min_size, param):
     # Run validation
     result = comp.validate(max_dimension=max_size, min_dimension=min_size)
 
-    # Display results
-    if result.is_valid:
-        click.echo(click.style("\n\u2713 Geometry is valid", fg="green"))
+    # Build JSON data
+    data = {
+        "component": component,
+        "params": comp_params if comp_params else None,
+        "is_valid": result.is_valid,
+        "metrics": {
+            "bbox_size": list(result.bbox_size) if result.bbox_size else None,
+            "solid_count": result.solid_count,
+            "face_count": result.face_count,
+        },
+        "issues": [
+            {
+                "severity": issue.severity.value,
+                "code": issue.code,
+                "message": issue.message,
+                "details": issue.details,
+            }
+            for issue in result.issues
+        ],
+        "summary": {
+            "error_count": result.error_count,
+            "warning_count": result.warning_count,
+        },
+    }
+
+    if json_output:
+        click.echo(json.dumps(data, indent=2))
     else:
-        click.echo(click.style("\n\u2717 Validation failed", fg="red"))
+        click.echo(f"\nValidating: {component}")
+        if comp_params:
+            click.echo(f"Parameters: {comp_params}")
+        click.echo("=" * 50)
 
-    # Show metrics
-    if result.bbox_size:
-        x, y, z = result.bbox_size
-        click.echo(f"  Bounding box: {x:.1f} x {y:.1f} x {z:.1f} mm")
+        # Display results
+        if result.is_valid:
+            click.echo(click.style("\n\u2713 Geometry is valid", fg="green"))
+        else:
+            click.echo(click.style("\n\u2717 Validation failed", fg="red"))
 
-    if result.solid_count > 0:
-        click.echo(f"  Solids: {result.solid_count}")
+        # Show metrics
+        if result.bbox_size:
+            x, y, z = result.bbox_size
+            click.echo(f"  Bounding box: {x:.1f} x {y:.1f} x {z:.1f} mm")
 
-    if result.face_count > 0:
-        click.echo(f"  Faces: {result.face_count}")
+        if result.solid_count > 0:
+            click.echo(f"  Solids: {result.solid_count}")
 
-    # Show issues
-    if result.issues:
-        click.echo("\nIssues:")
-        for issue in result.issues:
-            if issue.severity == IssueSeverity.ERROR:
-                prefix = click.style("  \u2717 ERROR", fg="red")
-            elif issue.severity == IssueSeverity.WARNING:
-                prefix = click.style("  \u26a0 WARNING", fg="yellow")
-            else:
-                prefix = click.style("  \u2139 INFO", fg="blue")
+        if result.face_count > 0:
+            click.echo(f"  Faces: {result.face_count}")
 
-            click.echo(f"{prefix}: {issue.code} - {issue.message}")
+        # Show issues
+        if result.issues:
+            click.echo("\nIssues:")
+            for issue in result.issues:
+                if issue.severity == IssueSeverity.ERROR:
+                    prefix = click.style("  \u2717 ERROR", fg="red")
+                elif issue.severity == IssueSeverity.WARNING:
+                    prefix = click.style("  \u26a0 WARNING", fg="yellow")
+                else:
+                    prefix = click.style("  \u2139 INFO", fg="blue")
 
-            if verbose and issue.details:
-                for k, v in issue.details.items():
-                    click.echo(f"      {k}: {v}")
+                click.echo(f"{prefix}: {issue.code} - {issue.message}")
 
-    # Summary
-    click.echo("")
-    if result.error_count > 0 or result.warning_count > 0:
-        summary_parts = []
-        if result.error_count > 0:
-            summary_parts.append(click.style(f"{result.error_count} error(s)", fg="red"))
-        if result.warning_count > 0:
-            summary_parts.append(click.style(f"{result.warning_count} warning(s)", fg="yellow"))
-        click.echo(", ".join(summary_parts))
-    else:
-        click.echo(click.style("No issues found.", fg="green"))
+                if verbose and issue.details:
+                    for k, v in issue.details.items():
+                        click.echo(f"      {k}: {v}")
+
+        # Summary
+        click.echo("")
+        if result.error_count > 0 or result.warning_count > 0:
+            summary_parts = []
+            if result.error_count > 0:
+                summary_parts.append(click.style(f"{result.error_count} error(s)", fg="red"))
+            if result.warning_count > 0:
+                summary_parts.append(click.style(f"{result.warning_count} warning(s)", fg="yellow"))
+            click.echo(", ".join(summary_parts))
+        else:
+            click.echo(click.style("No issues found.", fg="green"))
 
     # Exit with error if validation failed
     if not result.is_valid:

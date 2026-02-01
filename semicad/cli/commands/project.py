@@ -2,6 +2,7 @@
 Project commands - Project management and testing.
 """
 
+import json
 import shutil
 
 import click
@@ -339,17 +340,30 @@ def clean_subproject(ctx, subproject, all_projects, dry_run):
 def info(ctx):
     """Show current project information."""
     proj = ctx.obj["project"]
-
-    click.echo(f"Project: {proj.name}")
-    click.echo(f"  Root: {proj.root}")
-    click.echo(f"  Scripts: {proj.scripts_dir}")
-    click.echo(f"  Output: {proj.output_dir}")
+    json_output = ctx.obj.get("json_output", False)
 
     subprojects = proj.list_subprojects()
-    if subprojects:
-        click.echo(f"  Sub-projects:")
-        for sp in subprojects:
-            click.echo(f"    - {sp}")
+
+    data = {
+        "name": proj.name,
+        "root": str(proj.root),
+        "scripts_dir": str(proj.scripts_dir),
+        "output_dir": str(proj.output_dir),
+        "subprojects": subprojects,
+    }
+
+    if json_output:
+        click.echo(json.dumps(data, indent=2))
+    else:
+        click.echo(f"Project: {proj.name}")
+        click.echo(f"  Root: {proj.root}")
+        click.echo(f"  Scripts: {proj.scripts_dir}")
+        click.echo(f"  Output: {proj.output_dir}")
+
+        if subprojects:
+            click.echo(f"  Sub-projects:")
+            for sp in subprojects:
+                click.echo(f"    - {sp}")
 
 
 @project.command("list")
@@ -357,15 +371,25 @@ def info(ctx):
 def list_projects(ctx):
     """List sub-projects."""
     proj = ctx.obj["project"]
+    json_output = ctx.obj.get("json_output", False)
 
     subprojects = proj.list_subprojects()
-    if not subprojects:
-        click.echo("No sub-projects found.")
-        return
 
-    click.echo("Sub-projects:")
-    for sp in subprojects:
-        click.echo(f"  - {sp}")
+    data = {
+        "subprojects": subprojects,
+        "total": len(subprojects),
+    }
+
+    if json_output:
+        click.echo(json.dumps(data, indent=2))
+    else:
+        if not subprojects:
+            click.echo("No sub-projects found.")
+            return
+
+        click.echo("Sub-projects:")
+        for sp in subprojects:
+            click.echo(f"  - {sp}")
 
 
 @project.command("neo4j")
@@ -457,66 +481,107 @@ def view_subproject(ctx, subproject, file):
 def test(ctx):
     """Test all imports and dependencies."""
     proj = ctx.obj["project"]
+    json_output = ctx.obj.get("json_output", False)
 
-    click.echo("Testing Semi-AutoCAD installation...")
-    click.echo("=" * 50)
-
+    tests = []
     errors = []
 
     # Test CadQuery
-    click.echo("\n[1/5] CadQuery...")
+    if not json_output:
+        click.echo("Testing Semi-AutoCAD installation...")
+        click.echo("=" * 50)
+        click.echo("\n[1/5] CadQuery...")
+
     try:
         import cadquery as cq
-        click.echo(f"  OK - version {cq.__version__ if hasattr(cq, '__version__') else 'unknown'}")
+        version = cq.__version__ if hasattr(cq, '__version__') else 'unknown'
+        tests.append({"name": "cadquery", "status": "ok", "message": f"version {version}"})
+        if not json_output:
+            click.echo(f"  OK - version {version}")
     except ImportError as e:
-        click.echo(f"  FAIL - {e}")
+        tests.append({"name": "cadquery", "status": "fail", "message": str(e)})
+        if not json_output:
+            click.echo(f"  FAIL - {e}")
         errors.append("cadquery")
 
     # Test cq_warehouse
-    click.echo("\n[2/5] cq_warehouse...")
+    if not json_output:
+        click.echo("\n[2/5] cq_warehouse...")
     try:
         from cq_warehouse.fastener import SocketHeadCapScrew
         from cq_warehouse.bearing import SingleRowDeepGrooveBallBearing
-        click.echo("  OK - fasteners, bearings available")
+        tests.append({"name": "cq_warehouse", "status": "ok", "message": "fasteners, bearings available"})
+        if not json_output:
+            click.echo("  OK - fasteners, bearings available")
     except ImportError as e:
-        click.echo(f"  FAIL - {e}")
+        tests.append({"name": "cq_warehouse", "status": "fail", "message": str(e)})
+        if not json_output:
+            click.echo(f"  FAIL - {e}")
         errors.append("cq_warehouse")
 
     # Test cq_electronics
-    click.echo("\n[3/5] cq_electronics...")
+    if not json_output:
+        click.echo("\n[3/5] cq_electronics...")
     try:
         from cq_electronics.rpi.rpi3b import RPi3b
         rpi = RPi3b()
-        click.echo(f"  OK - RPi3b ({rpi.WIDTH}x{rpi.HEIGHT}mm)")
+        msg = f"RPi3b ({rpi.WIDTH}x{rpi.HEIGHT}mm)"
+        tests.append({"name": "cq_electronics", "status": "ok", "message": msg})
+        if not json_output:
+            click.echo(f"  OK - {msg}")
     except ImportError as e:
-        click.echo(f"  FAIL - {e}")
+        tests.append({"name": "cq_electronics", "status": "fail", "message": str(e)})
+        if not json_output:
+            click.echo(f"  FAIL - {e}")
         errors.append("cq_electronics")
 
     # Test PartCAD
-    click.echo("\n[4/5] PartCAD...")
+    if not json_output:
+        click.echo("\n[4/5] PartCAD...")
     try:
         import partcad as pc
         ctx_pc = pc.init(str(proj.root))
-        click.echo("  OK - context initialized")
+        tests.append({"name": "partcad", "status": "ok", "message": "context initialized"})
+        if not json_output:
+            click.echo("  OK - context initialized")
     except Exception as e:
-        click.echo(f"  WARN - {e}")
+        tests.append({"name": "partcad", "status": "warn", "message": str(e)})
+        if not json_output:
+            click.echo(f"  WARN - {e}")
 
     # Test custom components
-    click.echo("\n[5/5] Custom components...")
+    if not json_output:
+        click.echo("\n[5/5] Custom components...")
     try:
         from scripts.components import COMPONENTS
-        click.echo(f"  OK - {len(COMPONENTS)} components loaded")
+        msg = f"{len(COMPONENTS)} components loaded"
+        tests.append({"name": "custom_components", "status": "ok", "message": msg})
+        if not json_output:
+            click.echo(f"  OK - {msg}")
     except ImportError as e:
-        click.echo(f"  FAIL - {e}")
+        tests.append({"name": "custom_components", "status": "fail", "message": str(e)})
+        if not json_output:
+            click.echo(f"  FAIL - {e}")
         errors.append("custom_components")
 
-    # Summary
-    click.echo("\n" + "=" * 50)
-    if errors:
-        click.echo(f"FAILED: {', '.join(errors)}")
-        raise SystemExit(1)
+    # Output
+    if json_output:
+        data = {
+            "tests": tests,
+            "passed": len(errors) == 0,
+            "failed": errors,
+        }
+        click.echo(json.dumps(data, indent=2))
     else:
-        click.echo("All tests passed!")
+        # Summary
+        click.echo("\n" + "=" * 50)
+        if errors:
+            click.echo(f"FAILED: {', '.join(errors)}")
+        else:
+            click.echo("All tests passed!")
+
+    if errors:
+        raise SystemExit(1)
 
 
 @project.command("export")
