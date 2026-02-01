@@ -924,3 +924,141 @@ class TestParameterValidation:
         pin_header = next(c for c in components if c.name == "PinHeader")
         assert "schema" in pin_header.params
         assert "rows" in pin_header.params["schema"]
+
+
+# ============================================================================
+# P2.9 - Catalog Defaults and Simple Parameter Handling Tests
+# ============================================================================
+
+class TestCatalogDefaultsP29:
+    """Test catalog defaults fixes from P2.9."""
+
+    def test_rpi3b_has_simple_in_param_schema(self):
+        """RPi3b PARAM_SCHEMAS should include 'simple' parameter."""
+        from semicad.sources.electronics import PARAM_SCHEMAS
+
+        assert "RPi3b" in PARAM_SCHEMAS
+        assert "simple" in PARAM_SCHEMAS["RPi3b"]
+        assert PARAM_SCHEMAS["RPi3b"]["simple"]["type"] == bool
+
+    def test_rpi3b_default_includes_simple(self):
+        """RPi3b catalog entry should have simple=True as default."""
+        from semicad.sources.electronics import COMPONENT_CATALOG
+
+        entry = COMPONENT_CATALOG["RPi3b"]
+        defaults = entry[5]  # defaults is 6th element (0-indexed)
+
+        assert "simple" in defaults
+        assert defaults["simple"] is True
+
+    def test_rpi3b_accepts_simple_param(self, mock_cq_electronics):
+        """RPi3b should accept simple parameter without error."""
+        from semicad.sources.electronics import ElectronicsSource
+
+        source = ElectronicsSource()
+
+        # Should not raise
+        component = source.get_component("RPi3b", simple=False)
+        assert component.spec.params["simple"] is False
+
+        component2 = source.get_component("RPi3b", simple=True)
+        assert component2.spec.params["simple"] is True
+
+
+class TestSimpleParamRejectionP29:
+    """Test that components without 'simple' support reject the parameter."""
+
+    def test_dinclip_rejects_simple_param(self, mock_cq_electronics):
+        """DinClip should reject 'simple' parameter with clear error."""
+        from semicad.sources.electronics import ElectronicsSource, ParameterValidationError
+
+        source = ElectronicsSource()
+
+        with pytest.raises(ParameterValidationError) as exc_info:
+            source.get_component("DinClip", simple=False)
+
+        error_msg = str(exc_info.value)
+        assert "simple" in error_msg
+        assert "Unknown parameter" in error_msg
+        assert "none" in error_msg.lower()  # "Valid parameters: none"
+
+    def test_tophat_rejects_simple_param(self, mock_cq_electronics):
+        """TopHat should reject 'simple' parameter with clear error."""
+        from semicad.sources.electronics import ElectronicsSource, ParameterValidationError
+
+        source = ElectronicsSource()
+
+        with pytest.raises(ParameterValidationError) as exc_info:
+            source.get_component("TopHat", length=100, simple=True)
+
+        error_msg = str(exc_info.value)
+        assert "simple" in error_msg
+        assert "Unknown parameter" in error_msg
+        # Should list valid params
+        assert "length" in error_msg or "depth" in error_msg or "slots" in error_msg
+
+    def test_pitray_clip_rejects_simple_param(self, mock_cq_electronics):
+        """PiTrayClip should reject 'simple' parameter with clear error."""
+        from semicad.sources.electronics import ElectronicsSource, ParameterValidationError
+
+        source = ElectronicsSource()
+
+        with pytest.raises(ParameterValidationError) as exc_info:
+            source.get_component("PiTrayClip", simple=True)
+
+        error_msg = str(exc_info.value)
+        assert "simple" in error_msg
+        assert "Unknown parameter" in error_msg
+
+    def test_dinclip_param_schema_is_empty(self):
+        """DinClip PARAM_SCHEMAS should be empty (no params supported)."""
+        from semicad.sources.electronics import PARAM_SCHEMAS
+
+        assert "DinClip" in PARAM_SCHEMAS
+        assert PARAM_SCHEMAS["DinClip"] == {}
+
+    def test_tophat_param_schema_excludes_simple(self):
+        """TopHat PARAM_SCHEMAS should NOT include 'simple'."""
+        from semicad.sources.electronics import PARAM_SCHEMAS
+
+        assert "TopHat" in PARAM_SCHEMAS
+        assert "simple" not in PARAM_SCHEMAS["TopHat"]
+        # But should have the valid params
+        assert "length" in PARAM_SCHEMAS["TopHat"]
+        assert "depth" in PARAM_SCHEMAS["TopHat"]
+        assert "slots" in PARAM_SCHEMAS["TopHat"]
+
+    def test_pitray_clip_param_schema_is_empty(self):
+        """PiTrayClip PARAM_SCHEMAS should be empty (no params supported)."""
+        from semicad.sources.electronics import PARAM_SCHEMAS
+
+        assert "PiTrayClip" in PARAM_SCHEMAS
+        assert PARAM_SCHEMAS["PiTrayClip"] == {}
+
+
+class TestNonStrictModeP29:
+    """Test non-strict mode behavior with unsupported params."""
+
+    def test_dinclip_non_strict_filters_simple(self, mock_cq_electronics):
+        """DinClip in non-strict mode should filter 'simple' param."""
+        from semicad.sources.electronics import ElectronicsSource
+
+        source = ElectronicsSource()
+
+        # Should not raise in non-strict mode
+        component = source.get_component("DinClip", strict=False, simple=False)
+
+        # simple should NOT be in the params
+        assert "simple" not in component.spec.params
+
+    def test_tophat_non_strict_filters_simple(self, mock_cq_electronics):
+        """TopHat in non-strict mode should filter 'simple' param."""
+        from semicad.sources.electronics import ElectronicsSource
+
+        source = ElectronicsSource()
+
+        component = source.get_component("TopHat", length=100, strict=False, simple=True)
+
+        # simple should NOT be in the params, but length should be
+        assert "simple" not in component.spec.params
+        assert component.spec.params["length"] == 100

@@ -94,7 +94,8 @@ class AssemblyInfo:
 # Format: {"param_name": {"type": type, "min": value, "max": value, "required": bool}}
 PARAM_SCHEMAS = {
     "RPi3b": {
-        # No parameters
+        # P2.9: RPi3b supports simple parameter (defaults to True in component)
+        "simple": {"type": bool},
     },
     "PinHeader": {
         "rows": {"type": int, "min": 1, "max": 100},
@@ -114,15 +115,16 @@ PARAM_SCHEMAS = {
         "simple": {"type": bool},
     },
     "DinClip": {
-        # No parameters
+        # No parameters - fixed design
     },
     "TopHat": {
         "length": {"type": (int, float), "min": 0.1, "required": True},
         "depth": {"type": (int, float), "min": 0.1},
         "slots": {"type": bool},
+        # Note: TopHat does NOT support 'simple' parameter
     },
     "PiTrayClip": {
-        # No parameters
+        # No parameters - fixed design
     },
 }
 
@@ -226,7 +228,7 @@ COMPONENT_CATALOG = {
         "board",
         "Raspberry Pi 3B single-board computer",
         [],
-        {},
+        {"simple": True},  # P2.9: Explicitly set default
     ),
     # Connectors
     "PinHeader": (
@@ -261,7 +263,7 @@ COMPONENT_CATALOG = {
         "mechanical",
         "DIN rail mounting clip",
         [],
-        {},
+        {},  # No parameters
     ),
     "TopHat": (
         "cq_electronics.mechanical.din_rail",
@@ -269,7 +271,7 @@ COMPONENT_CATALOG = {
         "mechanical",
         "Top-hat (TH35) DIN rail section",
         ["length"],
-        {"depth": 7.5, "slots": True},
+        {"depth": 7.5, "slots": True},  # Note: no 'simple' - not supported
     ),
     # Mounting
     "PiTrayClip": (
@@ -278,7 +280,7 @@ COMPONENT_CATALOG = {
         "mounting",
         "Raspberry Pi mounting tray clip for enclosures (76x20x15mm)",
         [],
-        {},
+        {},  # No parameters
     ),
 }
 
@@ -498,7 +500,8 @@ class ElectronicsSource(ComponentSource):
 
     def _load_components(self) -> None:
         """Load available components from cq_electronics."""
-        for name, (module_path, class_name, category, desc, required, defaults) in COMPONENT_CATALOG.items():
+        for name, catalog_entry in COMPONENT_CATALOG.items():
+            module_path, class_name, category, desc, required, defaults = catalog_entry
             try:
                 # Try to import the module and class
                 module = __import__(module_path, fromlist=[class_name])
@@ -594,7 +597,7 @@ class ElectronicsSource(ComponentSource):
                 f"Required: [{', '.join(schema_info)}]"
             )
 
-        # Validate user-provided parameters
+        # Validate user-provided parameters (P2.6 + P2.9: validates and rejects unknown params)
         validated_params = validate_params(name, params, strict=strict)
 
         # Merge defaults with validated params (validated params override defaults)
