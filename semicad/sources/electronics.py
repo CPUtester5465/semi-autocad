@@ -28,13 +28,14 @@ See Also:
 """
 
 import warnings
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Iterator, Any
+from typing import Any
+
 import cadquery as cq
 
 from semicad.core.component import Component, ComponentSpec
 from semicad.core.registry import ComponentSource
-
 
 # Version compatibility (P2.12)
 MIN_CQ_ELECTRONICS_VERSION = "0.2.0"
@@ -219,12 +220,11 @@ def validate_params(component_name: str, params: dict, strict: bool = True) -> d
     provided_params = set(params.keys())
     unknown_params = provided_params - known_params
 
-    if unknown_params:
-        if strict:
-            errors.append(
-                f"Unknown parameter(s) for {component_name}: {sorted(unknown_params)}. "
-                f"Valid parameters: {sorted(known_params) if known_params else 'none'}"
-            )
+    if unknown_params and strict:
+        errors.append(
+            f"Unknown parameter(s) for {component_name}: {sorted(unknown_params)}. "
+            f"Valid parameters: {sorted(known_params) if known_params else 'none'}"
+        )
         # In non-strict mode, unknown params are simply filtered out
 
     # Validate each provided parameter
@@ -248,13 +248,12 @@ def validate_params(component_name: str, params: dict, strict: bool = True) -> d
                         f"got {type(value).__name__} ({value!r})"
                     )
                     continue
-            else:
-                if not isinstance(value, expected_type):
-                    errors.append(
-                        f"Parameter '{param_name}' must be {expected_type.__name__}, "
-                        f"got {type(value).__name__} ({value!r})"
-                    )
-                    continue
+            elif not isinstance(value, expected_type):
+                errors.append(
+                    f"Parameter '{param_name}' must be {expected_type.__name__}, "
+                    f"got {type(value).__name__} ({value!r})"
+                )
+                continue
 
         # Range checking for numeric types
         if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -677,7 +676,7 @@ class ElectronicsSource(ComponentSource):
             if defaults:
                 params_info["defaults"] = defaults
             # Include parameter schema for documentation
-            if name in PARAM_SCHEMAS and PARAM_SCHEMAS[name]:
+            if PARAM_SCHEMAS.get(name):
                 params_info["schema"] = PARAM_SCHEMAS[name]
 
             # Extract class-level metadata (constants)
@@ -839,7 +838,7 @@ class ElectronicsSource(ComponentSource):
         if name not in self._available_components:
             raise KeyError(f"Board not found: {name}")
 
-        cls, category, desc, required, defaults = self._available_components[name]
+        cls, category, desc, _required, _defaults = self._available_components[name]
         if category != "board":
             raise ValueError(f"{name} is not a board (category: {category})")
 

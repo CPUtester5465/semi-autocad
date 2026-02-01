@@ -8,10 +8,10 @@ Supports multiple output formats: CSV, JSON, Markdown.
 import csv
 import json
 from collections import Counter
-from dataclasses import dataclass, field, asdict
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, field
 from io import StringIO
 from pathlib import Path
-from typing import Union, Sequence
 
 from semicad.core.component import Component, ComponentSpec
 
@@ -119,7 +119,7 @@ def generate_bom(
     return BOM(title=title, entries=entries)
 
 
-def bom_to_csv(bom: BOM, output_path: Union[str, Path] | None = None) -> str:
+def bom_to_csv(bom: BOM, output_path: str | Path | None = None) -> str:
     """
     Export BOM to CSV format.
 
@@ -168,7 +168,7 @@ def bom_to_csv(bom: BOM, output_path: Union[str, Path] | None = None) -> str:
     return csv_string
 
 
-def bom_to_json(bom: BOM, output_path: Union[str, Path] | None = None, indent: int = 2) -> str:
+def bom_to_json(bom: BOM, output_path: str | Path | None = None, indent: int = 2) -> str:
     """
     Export BOM to JSON format.
 
@@ -202,7 +202,7 @@ def bom_to_json(bom: BOM, output_path: Union[str, Path] | None = None, indent: i
     return json_string
 
 
-def bom_to_markdown(bom: BOM, output_path: Union[str, Path] | None = None) -> str:
+def bom_to_markdown(bom: BOM, output_path: str | Path | None = None) -> str:
     """
     Export BOM to Markdown table format.
 
@@ -252,7 +252,7 @@ def bom_to_markdown(bom: BOM, output_path: Union[str, Path] | None = None) -> st
 
 def export_bom(
     bom: BOM,
-    output_path: Union[str, Path],
+    output_path: str | Path,
     format: str | None = None,
 ) -> Path:
     """

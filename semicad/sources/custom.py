@@ -2,7 +2,8 @@
 Custom component source - Adapts scripts/components.py to ComponentSource.
 """
 
-from typing import Iterator
+from collections.abc import Iterator
+
 import cadquery as cq
 
 from semicad.core.component import Component, ComponentSpec

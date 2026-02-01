@@ -10,10 +10,10 @@ import click
 from semicad.cli import verbose_echo
 from semicad.templates import (
     TEMPLATES,
-    scaffold_project,
-    validate_project_name,
     remove_project,
+    scaffold_project,
     sync_partcad,
+    validate_project_name,
 )
 
 
@@ -123,7 +123,7 @@ def new_project(ctx, name, template, description):
     click.echo()
 
     try:
-        verbose_echo(ctx, f"Calling scaffold_project...")
+        verbose_echo(ctx, "Calling scaffold_project...")
         created_dir = scaffold_project(
             name=name,
             template_name=template,
@@ -373,7 +373,7 @@ def info(ctx):
         click.echo(f"  Output: {proj.output_dir}")
 
         if subprojects:
-            click.echo(f"  Sub-projects:")
+            click.echo("  Sub-projects:")
             for sp in subprojects:
                 click.echo(f"    - {sp}")
 
@@ -434,7 +434,7 @@ def build_subproject(ctx, subproject, variant, all_variants):
     verbose_echo(ctx, f"Sub-project directory: {subproject_dir}")
 
     if not subproject_dir.exists():
-        verbose_echo(ctx, f"Directory does not exist")
+        verbose_echo(ctx, "Directory does not exist")
         click.echo(f"Sub-project not found: {subproject}", err=True)
         click.echo(f"Available: {proj.list_subprojects()}")
         raise SystemExit(1)
@@ -443,7 +443,7 @@ def build_subproject(ctx, subproject, variant, all_variants):
     verbose_echo(ctx, f"Looking for build script: {build_script}")
 
     if not build_script.exists():
-        verbose_echo(ctx, f"Build script not found")
+        verbose_echo(ctx, "Build script not found")
         click.echo(f"No build.py found in {subproject}", err=True)
         raise SystemExit(1)
 
@@ -474,8 +474,8 @@ def build_subproject(ctx, subproject, variant, all_variants):
 @click.pass_context
 def view_subproject(ctx, subproject, file):
     """Open sub-project in cq-editor."""
-    import subprocess
     import os
+    import subprocess
 
     proj = ctx.obj["project"]
     subproject_dir = proj.projects_dir / subproject
@@ -484,7 +484,7 @@ def view_subproject(ctx, subproject, file):
     verbose_echo(ctx, f"Sub-project directory: {subproject_dir}")
 
     if not subproject_dir.exists():
-        verbose_echo(ctx, f"Directory does not exist")
+        verbose_echo(ctx, "Directory does not exist")
         click.echo(f"Sub-project not found: {subproject}", err=True)
         raise SystemExit(1)
 
@@ -492,7 +492,7 @@ def view_subproject(ctx, subproject, file):
     verbose_echo(ctx, f"Target file: {target_file}")
 
     if not target_file.exists():
-        verbose_echo(ctx, f"File does not exist")
+        verbose_echo(ctx, "File does not exist")
         click.echo(f"File not found: {target_file}", err=True)
         raise SystemExit(1)
 
@@ -548,8 +548,8 @@ def test(ctx):
         click.echo("\n[2/5] cq_warehouse...")
     try:
         verbose_echo(ctx, "Importing cq_warehouse.fastener and cq_warehouse.bearing...")
-        from cq_warehouse.fastener import SocketHeadCapScrew
         from cq_warehouse.bearing import SingleRowDeepGrooveBallBearing
+        from cq_warehouse.fastener import SocketHeadCapScrew
         tests.append({"name": "cq_warehouse", "status": "ok", "message": "fasteners, bearings available"})
         if not json_output:
             click.echo("  OK - fasteners, bearings available")
@@ -584,7 +584,7 @@ def test(ctx):
     try:
         verbose_echo(ctx, "Importing partcad and initializing context...")
         import partcad as pc
-        ctx_pc = pc.init(str(proj.root))
+        pc.init(str(proj.root))
         tests.append({"name": "partcad", "status": "ok", "message": "context initialized"})
         if not json_output:
             click.echo("  OK - context initialized")
@@ -674,7 +674,7 @@ def export_subproject(ctx, subproject, part, format, quality, output):
     verbose_echo(ctx, f"Sub-project directory: {subproject_dir}")
 
     if not subproject_dir.exists():
-        verbose_echo(ctx, f"Directory does not exist")
+        verbose_echo(ctx, "Directory does not exist")
         click.echo(f"Sub-project not found: {subproject}", err=True)
         click.echo(f"Available: {proj.list_subprojects()}")
         raise SystemExit(1)
@@ -688,7 +688,7 @@ def export_subproject(ctx, subproject, part, format, quality, output):
     verbose_echo(ctx, f"Looking for build script: {build_script}")
 
     if not build_script.exists():
-        verbose_echo(ctx, f"Build script not found")
+        verbose_echo(ctx, "Build script not found")
         click.echo(f"No build.py found in {subproject}", err=True)
         raise SystemExit(1)
 
@@ -741,7 +741,7 @@ def bom_subproject(ctx, subproject, format, output):
     verbose_echo(ctx, f"Sub-project directory: {subproject_dir}")
 
     if not subproject_dir.exists():
-        verbose_echo(ctx, f"Directory does not exist")
+        verbose_echo(ctx, "Directory does not exist")
         click.echo(f"Sub-project not found: {subproject}", err=True)
         click.echo(f"Available: {proj.list_subprojects()}")
         raise SystemExit(1)
@@ -759,20 +759,20 @@ def bom_subproject(ctx, subproject, format, output):
 
     if bom_file and bom_file.exists():
         # Display existing BOM
-        verbose_echo(ctx, f"Found existing BOM file")
+        verbose_echo(ctx, "Found existing BOM file")
         click.echo(f"BOM for {subproject} ({format}):")
         click.echo("=" * 50)
         click.echo(bom_file.read_text())
     else:
         # Need to build first
-        verbose_echo(ctx, f"BOM file not found, need to build")
-        click.echo(f"BOM not found. Running build to generate...")
+        verbose_echo(ctx, "BOM file not found, need to build")
+        click.echo("BOM not found. Running build to generate...")
 
         build_script = subproject_dir / "build.py"
         verbose_echo(ctx, f"Looking for build script: {build_script}")
 
         if not build_script.exists():
-            verbose_echo(ctx, f"Build script not found")
+            verbose_echo(ctx, "Build script not found")
             click.echo(f"No build.py found in {subproject}", err=True)
             raise SystemExit(1)
 
@@ -791,10 +791,10 @@ def bom_subproject(ctx, subproject, format, output):
 
         # Now display BOM
         if bom_file and bom_file.exists():
-            verbose_echo(ctx, f"BOM file generated successfully")
+            verbose_echo(ctx, "BOM file generated successfully")
             click.echo(f"\nBOM for {subproject} ({format}):")
             click.echo("=" * 50)
             click.echo(bom_file.read_text())
         else:
-            verbose_echo(ctx, f"BOM file still not found after build")
-            click.echo(f"BOM file not generated. Check build.py output.")
+            verbose_echo(ctx, "BOM file still not found after build")
+            click.echo("BOM file not generated. Check build.py output.")

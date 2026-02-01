@@ -7,11 +7,10 @@ Supports multiple rendering backends:
 - Blender - High-quality renders (requires external Blender installation)
 """
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Union, Optional
 import subprocess
 import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 
 import cadquery as cq
 
@@ -44,7 +43,7 @@ STANDARD_VIEWS = {
 
 def export_svg_views(
     model: cq.Workplane,
-    output_prefix: Union[str, Path],
+    output_prefix: str | Path,
     views: list[str] | None = None,
     width: int = 800,
     height: int = 600,
@@ -107,11 +106,11 @@ def export_svg_views(
 
 
 def render_stl_to_png(
-    stl_path: Union[str, Path],
-    output_path: Union[str, Path],
+    stl_path: str | Path,
+    output_path: str | Path,
     width: int = 800,
     height: int = 600,
-) -> Optional[Path]:
+) -> Path | None:
     """
     Render STL to PNG using trimesh.
 
@@ -154,10 +153,10 @@ def render_stl_to_png(
 
 
 def render_stl_to_png_blender(
-    stl_path: Union[str, Path],
-    output_path: Union[str, Path],
+    stl_path: str | Path,
+    output_path: str | Path,
     resolution: int = 800,
-) -> Optional[Path]:
+) -> Path | None:
     """
     Render STL to PNG using Blender.
 
@@ -258,11 +257,11 @@ bpy.ops.render.render(write_still=True)
 
 def render_model_to_png(
     model: cq.Workplane,
-    output_path: Union[str, Path],
+    output_path: str | Path,
     width: int = 800,
     height: int = 600,
     method: str = "trimesh",
-) -> Optional[Path]:
+) -> Path | None:
     """
     Render a CadQuery model directly to PNG.
 

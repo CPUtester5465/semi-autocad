@@ -8,7 +8,6 @@ Quality settings control the mesh density vs file size tradeoff.
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Union
 
 import cadquery as cq
 
@@ -51,7 +50,7 @@ QUALITY_PRESETS: dict[STLQuality, STLOptions] = {
 
 def export_stl(
     model: cq.Workplane,
-    output_path: Union[str, Path],
+    output_path: str | Path,
     quality: STLQuality = STLQuality.NORMAL,
     tolerance: float | None = None,
     angular_tolerance: float | None = None,

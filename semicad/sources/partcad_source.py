@@ -11,14 +11,14 @@ Note: PartCAD CLI has compatibility issues with current Click version,
 so we use the Python API exclusively.
 """
 
-from typing import Iterator, Any
 import logging
+from collections.abc import Iterator
+from typing import Any
 
 import cadquery as cq
 
 from semicad.core.component import Component, ComponentSpec
 from semicad.core.registry import ComponentSource
-
 
 logger = logging.getLogger(__name__)
 

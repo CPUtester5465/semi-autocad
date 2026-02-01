@@ -4,12 +4,12 @@ cq_warehouse source - Adapts cq_warehouse to ComponentSource.
 cq_warehouse provides parametric fasteners, bearings, chains, etc.
 """
 
-from typing import Iterator
+from collections.abc import Iterator
+
 import cadquery as cq
 
 from semicad.core.component import Component, ComponentSpec
 from semicad.core.registry import ComponentSource
-
 
 # Map cq_warehouse classes to our categories
 FASTENER_CLASSES = {
@@ -102,7 +102,7 @@ class WarehouseSource(ComponentSource):
 
     def list_components(self) -> Iterator[ComponentSpec]:
         """List available component types (not individual sizes)."""
-        for class_name, (cls, default_type, desc) in self._fasteners.items():
+        for class_name, (_cls, default_type, desc) in self._fasteners.items():
             yield ComponentSpec(
                 name=class_name,
                 source=self.name,
@@ -111,7 +111,7 @@ class WarehouseSource(ComponentSource):
                 params={"fastener_type": default_type},
             )
 
-        for class_name, cls in self._bearings.items():
+        for class_name, _cls in self._bearings.items():
             yield ComponentSpec(
                 name=class_name,
                 source=self.name,

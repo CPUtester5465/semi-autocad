@@ -2,10 +2,11 @@
 View commands - Open files in cq-editor.
 """
 
-import click
-import subprocess
 import os
+import subprocess
 from pathlib import Path
+
+import click
 
 from semicad.cli import verbose_echo
 
@@ -40,9 +41,9 @@ def view(ctx, file):
 
     verbose_echo(ctx, f"PYTHONPATH: {pythonpath}")
 
-    click.echo(f"Opening cq-editor...")
+    click.echo("Opening cq-editor...")
     click.echo(f"  File: {file}")
-    click.echo(f"  Press F5 to render")
+    click.echo("  Press F5 to render")
 
     verbose_echo(ctx, f"Running: cq-editor {file}")
 

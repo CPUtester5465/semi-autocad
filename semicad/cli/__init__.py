@@ -6,14 +6,15 @@ Usage:
     ./bin/dev [command]
 """
 
-import click
 import platform
 import sys
-from importlib.metadata import version as get_pkg_version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version as get_pkg_version
 from pathlib import Path
 
-from semicad.core.project import get_project, Project
+import click
+
 import semicad
+from semicad.core.project import Project, get_project
 
 
 def verbose_echo(ctx, msg):
@@ -51,7 +52,7 @@ def cli(ctx, project, json_output, verbose):
 
 
 # Import and register command groups
-from semicad.cli.commands import view, build, library, project as proj_cmd, completion, partcad_cmd
+from semicad.cli.commands import build, completion, library, partcad_cmd, project as proj_cmd, view
 
 cli.add_command(view.view)
 cli.add_command(view.edit)

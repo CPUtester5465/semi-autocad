@@ -14,7 +14,6 @@ from typing import Any
 
 import yaml
 
-
 # Available templates
 TEMPLATES = ["basic", "quadcopter", "enclosure"]
 
@@ -237,7 +236,7 @@ def sync_partcad(project_root: Path) -> list[str]:
     if "dependencies" not in config:
         return []
 
-    projects_dir = project_root / "projects"
+    project_root / "projects"
     removed = []
 
     # Find local dependencies that point to non-existent directories
@@ -330,14 +329,14 @@ def scaffold_project(
 
 __all__ = [
     "TEMPLATES",
-    "validate_project_name",
-    "name_to_python_identifier",
-    "name_to_class_name",
     "get_template",
-    "render_template",
-    "update_root_partcad",
+    "name_to_class_name",
+    "name_to_python_identifier",
     "remove_from_partcad",
-    "scaffold_project",
     "remove_project",
+    "render_template",
+    "scaffold_project",
     "sync_partcad",
+    "update_root_partcad",
+    "validate_project_name",
 ]

@@ -9,7 +9,8 @@ A Component is any CAD part that can be:
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
 import cadquery as cq
 
 if TYPE_CHECKING:
@@ -18,13 +19,23 @@ if TYPE_CHECKING:
 
 @dataclass
 class ComponentSpec:
-    """Specification for a component - metadata without the geometry."""
+    """Specification for a component - metadata without the geometry.
+
+    Attributes:
+        name: Short name of the component (e.g., "motor_2207").
+        source: Source identifier (e.g., "custom", "cq_warehouse", "partcad").
+        category: Component category (e.g., "fastener", "motor", "electronics").
+        params: Parameter definitions for parametric components.
+        description: Human-readable description of the component.
+        metadata: Additional component metadata (dimensions, weight, etc.).
+    """
+
     name: str
-    source: str  # e.g., "custom", "cq_warehouse", "partcad"
-    category: str  # e.g., "fastener", "motor", "electronics"
-    params: dict = field(default_factory=dict)
+    source: str
+    category: str
+    params: dict[str, Any] = field(default_factory=dict)
     description: str = ""
-    metadata: dict = field(default_factory=dict)  # Component metadata (dimensions, etc.)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def full_name(self) -> str:
@@ -95,12 +106,12 @@ class Component(ABC):
             ValidationResult with issues and metrics
         """
         from semicad.core.validation import (
-            ValidationResult,
-            ValidationIssue,
-            IssueSeverity,
-            validate_geometry,
             MAX_DIMENSION,
             MIN_DIMENSION,
+            IssueSeverity,
+            ValidationIssue,
+            ValidationResult,
+            validate_geometry,
         )
 
         # Use defaults if not specified
@@ -134,18 +145,28 @@ class Component(ABC):
         translated = TranslatedComponent(self, x, y, z)
         return translated
 
-    def rotate(self, axis: tuple, angle: float) -> "Component":
-        """Return a rotated copy of this component."""
+    def rotate(
+        self, axis: tuple[float, float, float], angle: float
+    ) -> "Component":
+        """Return a rotated copy of this component.
+
+        Args:
+            axis: Rotation axis as (x, y, z) unit vector.
+            angle: Rotation angle in degrees.
+
+        Returns:
+            New component with rotation applied.
+        """
         return RotatedComponent(self, axis, angle)
 
 
 class TranslatedComponent(Component):
     """Decorator for translated components."""
 
-    def __init__(self, wrapped: Component, x: float, y: float, z: float):
+    def __init__(self, wrapped: Component, x: float, y: float, z: float) -> None:
         super().__init__(wrapped.spec)
         self._wrapped = wrapped
-        self._offset = (x, y, z)
+        self._offset: tuple[float, float, float] = (x, y, z)
 
     def build(self) -> cq.Workplane:
         return self._wrapped.geometry.translate(self._offset)
@@ -154,10 +175,12 @@ class TranslatedComponent(Component):
 class RotatedComponent(Component):
     """Decorator for rotated components."""
 
-    def __init__(self, wrapped: Component, axis: tuple, angle: float):
+    def __init__(
+        self, wrapped: Component, axis: tuple[float, float, float], angle: float
+    ) -> None:
         super().__init__(wrapped.spec)
         self._wrapped = wrapped
-        self._axis = axis
+        self._axis: tuple[float, float, float] = axis
         self._angle = angle
 
     def build(self) -> cq.Workplane:

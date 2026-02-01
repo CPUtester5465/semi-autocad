@@ -5,7 +5,43 @@ Provides abstractions for components, assemblies, and projects.
 """
 
 from .component import Component, ComponentSpec
-from .registry import CacheStats, ComponentRegistry
+from .exceptions import (
+    ComponentBuildError,
+    ComponentError,
+    ComponentNotFoundError,
+    ExportError,
+    ExportFormatError,
+    ParameterValidationError,
+    ProjectConfigError,
+    ProjectError,
+    ProjectNotFoundError,
+    SemicadError,
+    SourceError,
+    SourceInitializationError,
+    SourceNotAvailableError,
+)
 from .project import Project
+from .registry import CacheStats, ComponentRegistry
 
-__all__ = ["CacheStats", "Component", "ComponentSpec", "ComponentRegistry", "Project"]
+__all__ = [
+    # Classes
+    "CacheStats",
+    "Component",
+    "ComponentRegistry",
+    "ComponentSpec",
+    "Project",
+    # Exceptions
+    "ComponentBuildError",
+    "ComponentError",
+    "ComponentNotFoundError",
+    "ExportError",
+    "ExportFormatError",
+    "ParameterValidationError",
+    "ProjectConfigError",
+    "ProjectError",
+    "ProjectNotFoundError",
+    "SemicadError",
+    "SourceError",
+    "SourceInitializationError",
+    "SourceNotAvailableError",
+]

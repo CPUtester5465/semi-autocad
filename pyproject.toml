@@ -43,3 +43,131 @@ semicad = "semicad.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["semicad*", "scripts*"]
+
+# ============================================================================
+# Static Analysis Tools
+# ============================================================================
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+show_error_codes = true
+show_column_numbers = true
+pretty = true
+
+# Strict mode for core modules (gradual adoption)
+[[tool.mypy.overrides]]
+module = "semicad.core.*"
+strict = true
+warn_unreachable = true
+
+# Moderate strictness for sources
+[[tool.mypy.overrides]]
+module = "semicad.sources.*"
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+# Basic checking for CLI (lots of Click decorators)
+[[tool.mypy.overrides]]
+module = "semicad.cli.*"
+check_untyped_defs = true
+
+# Ignore missing stubs for third-party packages
+[[tool.mypy.overrides]]
+module = [
+    "cadquery.*",
+    "cq_warehouse.*",
+    "cq_electronics.*",
+    "partcad.*",
+    "OCP.*",
+    "trimesh.*",
+    "yaml.*",
+]
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort (import sorting)
+    "UP",     # pyupgrade (Python version upgrades)
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+    "PT",     # flake8-pytest-style
+    "RUF",    # Ruff-specific rules
+    "TCH",    # flake8-type-checking (TYPE_CHECKING imports)
+    "TID",    # flake8-tidy-imports
+    "PL",     # Pylint
+]
+ignore = [
+    "E501",     # line too long (handled by formatter)
+    "PLR0913",  # too many arguments (CAD functions often need many params)
+    "PLR2004",  # magic values (common in CAD for dimensions)
+    "PLR0912",  # too many branches
+    "PLR0915",  # too many statements
+    "SIM108",   # ternary instead of if-else (readability preference)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["semicad"]
+force-single-line = false
+combine-as-imports = true
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR2004"]  # Allow magic values in tests
+"scripts/*" = ["PLR2004"]  # Allow magic values in component scripts
+"projects/*" = ["PLR2004"]  # Allow magic values in project files
+# CLI uses lazy imports for optional dependencies - this is intentional
+"semicad/cli/*" = ["PLC0415", "E402"]
+# Templates use conditional imports for optional features
+"semicad/templates/*" = ["PLC0415"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "requires_cq_electronics: marks tests that require cq_electronics installed",
+]
+
+[tool.coverage.run]
+source = ["semicad"]
+branch = true
+omit = [
+    "semicad/cli/commands/completion.py",  # Shell completion is hard to test
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@abstractmethod",
+]
+show_missing = true
+fail_under = 0  # Set to 70 once baseline is established
+
+[tool.bandit]
+exclude_dirs = ["tests", "projects", "scripts"]
+skips = [
+    "B101",  # assert_used - assertions are fine in non-production code
+]

@@ -2,8 +2,9 @@
 Build commands - Generate and export CAD files.
 """
 
-import click
 from pathlib import Path
+
+import click
 
 from semicad.cli import verbose_echo
 
@@ -24,8 +25,8 @@ def build(ctx, output):
     verbose_echo(ctx, f"Looking for build script: {build_script}")
 
     if build_script.exists():
-        import subprocess
         import os
+        import subprocess
 
         env = os.environ.copy()
         env["PYTHONPATH"] = f"{project.scripts_dir}:{project.root}"
@@ -94,7 +95,7 @@ def render(ctx, input_file, output, resolution, method):
 
     if result:
         click.echo(f"Saved to: {result}")
-        verbose_echo(ctx, f"Render completed successfully")
+        verbose_echo(ctx, "Render completed successfully")
     else:
         click.echo("Render failed. Check error messages above.", err=True)
         raise SystemExit(1)
@@ -167,7 +168,7 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
         ./bin/dev export BGA -p length=10 -p width=10
     """
     from semicad.core.registry import get_registry
-    from semicad.export import export_step, export_stl, STLQuality
+    from semicad.export import STLQuality, export_step, export_stl
 
     project = ctx.obj["project"]
     output_dir = Path(output) if output else project.output_dir
@@ -231,7 +232,7 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
             click.echo(f"  STL: {stl_file} (quality: {quality})")
 
     except KeyError as e:
-        verbose_echo(ctx, f"Component lookup failed in all sources")
+        verbose_echo(ctx, "Component lookup failed in all sources")
         click.echo(f"Component not found: {e}", err=True)
         raise SystemExit(1)
     except ValueError as e:
@@ -242,7 +243,7 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
             spec = registry.get_spec(component)
             if spec.params and "required" in spec.params:
                 click.echo(f"\nRequired parameters for {component}: {spec.params['required']}")
-                click.echo(f"\nExample:")
+                click.echo("\nExample:")
                 example_params = " ".join(f"-p {p}=<value>" for p in spec.params["required"])
                 click.echo(f"  ./bin/dev export {component} {example_params}")
         except KeyError:

@@ -5,6 +5,7 @@ Project context - Single Responsibility: Manage project state and paths.
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
 import yaml
 
 
@@ -14,20 +15,29 @@ class Project:
     Represents a Semi-AutoCAD project context.
 
     Manages paths, configuration, and project-specific settings.
+
+    Attributes:
+        root: Absolute path to the project root directory.
+        name: Project name (defaults to directory name).
+        config: Configuration loaded from partcad.yaml.
     """
 
     root: Path
     name: str = ""
-    config: dict = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.root = Path(self.root).resolve()
         if not self.name:
             self.name = self.root.name
         self._load_config()
 
     def _load_config(self) -> None:
-        """Load project configuration from partcad.yaml or pyproject.toml."""
+        """Load project configuration from partcad.yaml.
+
+        If the configuration file doesn't exist or is empty,
+        an empty dict is used.
+        """
         partcad_file = self.root / "partcad.yaml"
         if partcad_file.exists():
             with open(partcad_file) as f:

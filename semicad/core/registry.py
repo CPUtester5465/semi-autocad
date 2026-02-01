@@ -6,8 +6,10 @@ Dependency Inversion: Depends on ComponentSource abstraction, not concrete sourc
 """
 
 from collections import OrderedDict
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator
+from typing import Any
+
 from .component import Component, ComponentSpec
 
 
@@ -52,7 +54,7 @@ class ComponentSource:
         """Yield all available component specs from this source."""
         raise NotImplementedError
 
-    def get_component(self, name: str, **params) -> Component:
+    def get_component(self, name: str, **params: Any) -> Component:
         """Load a component by name with optional parameters."""
         raise NotImplementedError
 
@@ -151,7 +153,7 @@ class ComponentRegistry:
 
         raise KeyError(f"Component not found: {name}")
 
-    def get(self, full_name: str, use_cache: bool = True, **params) -> Component:
+    def get(self, full_name: str, use_cache: bool = True, **params: Any) -> Component:
         """
         Get component by full name (source/category/name) or short name.
 
@@ -196,7 +198,7 @@ class ComponentRegistry:
 
         return component
 
-    def _get_uncached(self, full_name: str, **params) -> Component:
+    def _get_uncached(self, full_name: str, **params: Any) -> Component:
         """Internal method to fetch component without cache."""
         parts = full_name.split("/")
 
@@ -273,26 +275,54 @@ def get_registry() -> ComponentRegistry:
 
 
 def _init_default_sources(registry: ComponentRegistry) -> None:
-    """Initialize registry with default sources."""
+    """Initialize registry with default sources.
+
+    Sources are loaded on a best-effort basis. If a source's dependencies
+    are not installed, that source is silently skipped. This allows the
+    registry to work with any subset of optional dependencies.
+
+    Sources are registered in order:
+    1. custom - Always available (built-in components)
+    2. warehouse - Requires cq_warehouse (fasteners, bearings)
+    3. electronics - Requires cq_electronics (boards, connectors)
+    4. partcad - Requires partcad (package manager)
+    """
     # Import here to avoid circular imports
-    from semicad.sources import custom, warehouse, electronics, partcad_source
+    from semicad.sources import custom, electronics, partcad_source, warehouse
 
     try:
         registry.register_source(custom.CustomSource())
-    except Exception:
-        pass  # Custom source not available
+    except (ImportError, OSError, RuntimeError) as e:
+        # ImportError: dependency missing
+        # OSError: file access issues
+        # RuntimeError: initialization failed
+        import logging
+
+        logging.debug("Custom source not available: %s", e)
 
     try:
         registry.register_source(warehouse.WarehouseSource())
-    except Exception:
-        pass  # cq_warehouse not installed
+    except ImportError:
+        pass  # cq_warehouse not installed (expected if not using fasteners)
+    except (OSError, RuntimeError) as e:
+        import logging
+
+        logging.debug("Warehouse source initialization failed: %s", e)
 
     try:
         registry.register_source(electronics.ElectronicsSource())
-    except Exception:
-        pass  # cq_electronics not installed
+    except ImportError:
+        pass  # cq_electronics not installed (expected if not using electronics)
+    except (OSError, RuntimeError) as e:
+        import logging
+
+        logging.debug("Electronics source initialization failed: %s", e)
 
     try:
         registry.register_source(partcad_source.PartCADSource())
-    except Exception:
-        pass  # PartCAD not installed or initialization failed
+    except ImportError:
+        pass  # PartCAD not installed (expected if not using package manager)
+    except (OSError, RuntimeError) as e:
+        import logging
+
+        logging.debug("PartCAD source initialization failed: %s", e)

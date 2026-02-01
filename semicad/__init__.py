@@ -7,14 +7,14 @@ Uses CadQuery for parametric modeling and Neo4j for design memory.
 __version__ = "0.1.0"
 
 from semicad.core.component import Component, ComponentSpec
-from semicad.core.registry import get_registry, ComponentRegistry
-from semicad.core.project import get_project, Project
+from semicad.core.project import Project, get_project
+from semicad.core.registry import ComponentRegistry, get_registry
 
 __all__ = [
     "Component",
-    "ComponentSpec",
     "ComponentRegistry",
-    "get_registry",
+    "ComponentSpec",
     "Project",
     "get_project",
+    "get_registry",
 ]

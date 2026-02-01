@@ -3,7 +3,6 @@
 import click
 from click.shell_completion import get_completion_class
 
-
 SHELLS = ["bash", "zsh", "fish"]
 
 

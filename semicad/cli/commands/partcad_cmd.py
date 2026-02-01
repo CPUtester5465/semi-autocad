@@ -203,7 +203,7 @@ def part_info(ctx, path):
                     else:
                         click.echo(f"    {name}: {param}")
 
-    except KeyError as e:
+    except KeyError:
         click.echo(f"Part not found: {path}", err=True)
         raise SystemExit(1)
     except ImportError as e:
@@ -232,8 +232,9 @@ def install_package(ctx, package):
     json_output = ctx.obj.get("json_output", False)
 
     try:
-        from semicad.sources.partcad_source import _normalize_path
         import partcad
+
+        from semicad.sources.partcad_source import _normalize_path
 
         package = _normalize_path(package)
 
@@ -313,8 +314,9 @@ def render_part(ctx, path, output, fmt, size):
             params[key] = value
 
     try:
-        from semicad.sources.partcad_source import PartCADSource
         import cadquery as cq
+
+        from semicad.sources.partcad_source import PartCADSource
 
         source = PartCADSource()
         component = source.get_component(path, **params)
@@ -343,7 +345,7 @@ def render_part(ctx, path, output, fmt, size):
                 cq.exporters.export(geometry, step_output)
                 click.echo(f"PNG rendering not available. Exported STEP to: {step_output}")
 
-    except KeyError as e:
+    except KeyError:
         click.echo(f"Part not found: {path}", err=True)
         raise SystemExit(1)
     except ImportError as e:
@@ -395,7 +397,7 @@ def show_sizes(ctx, path, param):
             if len(sizes) > 30:
                 click.echo(f"  ... and {len(sizes) - 30} more")
 
-    except KeyError as e:
+    except KeyError:
         click.echo(f"Part not found: {path}", err=True)
         raise SystemExit(1)
     except ImportError as e:

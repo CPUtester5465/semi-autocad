@@ -119,7 +119,7 @@ def info(ctx, component):
                         click.echo(f"    {k}: {v}")
 
     except KeyError:
-        verbose_echo(ctx, f"Component not found in any source")
+        verbose_echo(ctx, "Component not found in any source")
         click.echo(f"Component not found: {component}", err=True)
         raise SystemExit(1)
 
@@ -154,7 +154,7 @@ def fasteners(ctx, fastener_type):
         for size in sizes:
             click.echo(f"  {size}")
 
-        click.echo(f"\nExample usage:")
+        click.echo("\nExample usage:")
         click.echo(f'  registry.get("{fastener_type}", size="M3-0.5", length=10)')
 
 
@@ -293,7 +293,7 @@ def boards(ctx):
             if hole_spacing and hole_offset:
                 click.echo(f"  Hole spacing: {hole_spacing}mm (long), offset {hole_offset}mm from edge")
 
-        click.echo(f"\nExample usage:")
+        click.echo("\nExample usage:")
         click.echo('  registry.get("RPi3b")')
 
 
@@ -346,7 +346,7 @@ def connectors(ctx):
                 defaults_str = ", ".join(f"{k}={v}" for k, v in defaults.items())
                 click.echo(f"  Defaults: {defaults_str}")
 
-        click.echo(f"\nExample usage:")
+        click.echo("\nExample usage:")
         click.echo('  registry.get("PinHeader", rows=2, columns=20)')
         click.echo('  registry.get("JackSurfaceMount")')
 
@@ -480,7 +480,7 @@ def validate(ctx, component, max_size, min_size, param):
         comp = registry.get(component, **comp_params)
         verbose_echo(ctx, f"Found in source: {comp.spec.source}")
     except KeyError:
-        verbose_echo(ctx, f"Component not found in any source")
+        verbose_echo(ctx, "Component not found in any source")
         click.echo(f"Component not found: {component}", err=True)
         raise SystemExit(1)
     except ValueError as e:
@@ -490,7 +490,7 @@ def validate(ctx, component, max_size, min_size, param):
             spec = registry.get_spec(component)
             if spec.params and "required" in spec.params:
                 click.echo(f"\nRequired parameters for {component}: {spec.params['required']}")
-                click.echo(f"\nExample:")
+                click.echo("\nExample:")
                 example_params = " ".join(f"-p {p}=<value>" for p in spec.params["required"])
                 click.echo(f"  ./bin/dev lib validate {component} {example_params}")
         except KeyError:

@@ -7,7 +7,6 @@ for CAD data exchange. It preserves exact geometry (no tessellation).
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union
 
 import cadquery as cq
 
@@ -35,7 +34,7 @@ DEFAULT_OPTIONS = STEPOptions()
 
 def export_step(
     model: cq.Workplane,
-    output_path: Union[str, Path],
+    output_path: str | Path,
     application_protocol: str | None = None,
     write_pcurves: bool | None = None,
     precision_mode: int | None = None,
@@ -73,7 +72,7 @@ def export_step(
 
 def export_step_assembly(
     assembly: cq.Assembly,
-    output_path: Union[str, Path],
+    output_path: str | Path,
 ) -> Path:
     """
     Export a CadQuery Assembly to STEP file.
