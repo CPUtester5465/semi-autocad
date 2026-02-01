@@ -7,6 +7,8 @@ import subprocess
 import os
 from pathlib import Path
 
+from semicad.cli import verbose_echo
+
 
 @click.command()
 @click.argument("file", required=False, type=click.Path())
@@ -18,10 +20,12 @@ def view(ctx, file):
     # Default to assembly_viewer.py
     if not file:
         file = project.scripts_dir / "assembly_viewer.py"
+        verbose_echo(ctx, f"No file specified, using default: {file}")
     else:
         file = Path(file)
         if not file.is_absolute():
             file = project.root / file
+        verbose_echo(ctx, f"Resolved file path: {file}")
 
     if not file.exists():
         click.echo(f"File not found: {file}", err=True)
@@ -34,9 +38,13 @@ def view(ctx, file):
         pythonpath += f":{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
 
+    verbose_echo(ctx, f"PYTHONPATH: {pythonpath}")
+
     click.echo(f"Opening cq-editor...")
     click.echo(f"  File: {file}")
     click.echo(f"  Press F5 to render")
+
+    verbose_echo(ctx, f"Running: cq-editor {file}")
 
     try:
         subprocess.run(["cq-editor", str(file)], env=env)
@@ -54,10 +62,14 @@ def edit(ctx, file):
 
     if not file:
         file = project.scripts_dir / "assembly_viewer.py"
+        verbose_echo(ctx, f"No file specified, using default: {file}")
     else:
         file = Path(file)
         if not file.is_absolute():
             file = project.root / file
+        verbose_echo(ctx, f"Resolved file path: {file}")
 
     editor = os.environ.get("EDITOR", "nano")
+    verbose_echo(ctx, f"Using editor: {editor}")
+    verbose_echo(ctx, f"Running: {editor} {file}")
     subprocess.run([editor, str(file)])

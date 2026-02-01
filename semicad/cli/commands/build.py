@@ -5,6 +5,8 @@ Build commands - Generate and export CAD files.
 import click
 from pathlib import Path
 
+from semicad.cli import verbose_echo
+
 
 @click.command()
 @click.option("--output", "-o", type=click.Path(), help="Output directory")
@@ -19,6 +21,8 @@ def build(ctx, output):
 
     # Find and run build script
     build_script = project.scripts_dir / "quadcopter_assembly.py"
+    verbose_echo(ctx, f"Looking for build script: {build_script}")
+
     if build_script.exists():
         import subprocess
         import os
@@ -26,11 +30,17 @@ def build(ctx, output):
         env = os.environ.copy()
         env["PYTHONPATH"] = f"{project.scripts_dir}:{project.root}"
 
+        verbose_echo(ctx, f"PYTHONPATH: {env['PYTHONPATH']}")
+        verbose_echo(ctx, f"Working directory: {project.root}")
+        verbose_echo(ctx, f"Running: python {build_script}")
+
         result = subprocess.run(
             ["python", str(build_script)],
             env=env,
             cwd=str(project.root),
         )
+
+        verbose_echo(ctx, f"Build script exit code: {result.returncode}")
 
         if result.returncode == 0:
             click.echo("\nBuild complete. Output files:")
@@ -68,15 +78,23 @@ def render(ctx, input_file, output, resolution, method):
 
     width, height = map(int, resolution.split("x"))
 
+    verbose_echo(ctx, f"Input file: {input_path}")
+    verbose_echo(ctx, f"Output file: {output_path}")
+    verbose_echo(ctx, f"Resolution: {width}x{height}")
+    verbose_echo(ctx, f"Method: {method}")
+
     click.echo(f"Rendering {input_path.name} to PNG ({method})...")
 
     if method == "blender":
+        verbose_echo(ctx, f"Using Blender renderer with resolution={max(width, height)}")
         result = render_stl_to_png_blender(input_path, output_path, resolution=max(width, height))
     else:
+        verbose_echo(ctx, f"Using trimesh renderer with width={width}, height={height}")
         result = render_stl_to_png(input_path, output_path, width=width, height=height)
 
     if result:
         click.echo(f"Saved to: {result}")
+        verbose_echo(ctx, f"Render completed successfully")
     else:
         click.echo("Render failed. Check error messages above.", err=True)
         raise SystemExit(1)
@@ -154,7 +172,13 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
     project = ctx.obj["project"]
     output_dir = Path(output) if output else project.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    verbose_echo(ctx, f"Output directory: {output_dir}")
+    verbose_echo(ctx, "Initializing component registry...")
+
     registry = get_registry()
+
+    verbose_echo(ctx, f"Registry sources: {registry.sources}")
 
     # Parse component parameters
     comp_params = parse_param(ctx, None, param)
@@ -168,21 +192,35 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
     }
     stl_quality = quality_map[quality]
 
+    verbose_echo(ctx, f"STL quality: {quality} -> {stl_quality}")
+    if tolerance:
+        verbose_echo(ctx, f"Linear tolerance override: {tolerance}")
+    if angular_tolerance:
+        verbose_echo(ctx, f"Angular tolerance override: {angular_tolerance}")
+
     click.echo(f"Exporting component: {component}")
     if comp_params:
         click.echo(f"  Parameters: {comp_params}")
 
     try:
+        verbose_echo(ctx, f"Looking up component: {component}")
+        if comp_params:
+            verbose_echo(ctx, f"With parameters: {comp_params}")
         comp = registry.get(component, **comp_params)
+        verbose_echo(ctx, f"Found component: {comp.name} (source: {comp.spec.source})")
+        verbose_echo(ctx, "Generating geometry...")
         geometry = comp.geometry
+        verbose_echo(ctx, "Geometry generated successfully")
 
         if format in ("step", "both"):
             step_file = output_dir / f"{comp.name}.step"
+            verbose_echo(ctx, f"Exporting STEP to: {step_file}")
             export_step(geometry, step_file)
             click.echo(f"  STEP: {step_file}")
 
         if format in ("stl", "both"):
             stl_file = output_dir / f"{comp.name}.stl"
+            verbose_echo(ctx, f"Exporting STL to: {stl_file}")
             export_stl(
                 geometry,
                 stl_file,
@@ -193,6 +231,7 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
             click.echo(f"  STL: {stl_file} (quality: {quality})")
 
     except KeyError as e:
+        verbose_echo(ctx, f"Component lookup failed in all sources")
         click.echo(f"Component not found: {e}", err=True)
         raise SystemExit(1)
     except ValueError as e:
@@ -210,5 +249,6 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
             pass
         raise SystemExit(1)
     except Exception as e:
+        verbose_echo(ctx, f"Exception type: {type(e).__name__}")
         click.echo(f"Export failed: {e}", err=True)
         raise SystemExit(1)

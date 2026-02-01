@@ -16,16 +16,22 @@ from semicad.core.project import get_project, Project
 import semicad
 
 
+def verbose_echo(ctx, msg):
+    """Print debug message if verbose mode is enabled."""
+    if ctx.obj.get("verbose"):
+        click.echo(click.style(f"[verbose] {msg}", dim=True))
+
+
 # Create main CLI group
 @click.group(invoke_without_command=True)
 @click.option("--project", "-p", type=click.Path(exists=True), help="Project root directory")
 @click.option("--json", "json_output", is_flag=True, help="Output in JSON format for scripting")
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose debug output")
 @click.pass_context
-def cli(ctx, project, json_output):
+def cli(ctx, project, json_output, verbose):
     """Semi-AutoCAD - AI-assisted CAD design system."""
     ctx.ensure_object(dict)
-
-    # Store JSON output preference in context
+    ctx.obj["verbose"] = verbose
     ctx.obj["json_output"] = json_output
 
     # Show help if no command given
@@ -36,8 +42,12 @@ def cli(ctx, project, json_output):
     # Set project context
     if project:
         ctx.obj["project"] = get_project(project)
+        if verbose:
+            verbose_echo(ctx, f"Project root: {project}")
     else:
         ctx.obj["project"] = get_project(Path.cwd())
+        if verbose:
+            verbose_echo(ctx, f"Project root: {Path.cwd()}")
 
 
 # Import and register command groups

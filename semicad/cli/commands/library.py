@@ -6,9 +6,12 @@ import json
 
 import click
 
+from semicad.cli import verbose_echo
+
 
 @click.group()
-def lib():
+@click.pass_context
+def lib(ctx):
     """Component library operations."""
     pass
 
@@ -21,7 +24,9 @@ def list_libs(ctx, source, category):
     """List available components."""
     from semicad.core.registry import get_registry
 
+    verbose_echo(ctx, "Initializing component registry...")
     registry = get_registry()
+    verbose_echo(ctx, f"Registry sources: {registry.sources}")
     json_output = ctx.obj.get("json_output", False)
 
     # Build data structure
@@ -68,12 +73,16 @@ def info(ctx, component):
     """Show detailed info about a component."""
     from semicad.core.registry import get_registry
 
+    verbose_echo(ctx, "Initializing component registry...")
     registry = get_registry()
+    verbose_echo(ctx, f"Registry sources: {registry.sources}")
     json_output = ctx.obj.get("json_output", False)
 
     try:
         # Use get_spec() to avoid requiring params for parametric components
+        verbose_echo(ctx, f"Looking up component spec: {component}")
         spec = registry.get_spec(component)
+        verbose_echo(ctx, f"Found in source: {spec.source}")
 
         data = {
             "name": spec.name,
@@ -110,6 +119,7 @@ def info(ctx, component):
                         click.echo(f"    {k}: {v}")
 
     except KeyError:
+        verbose_echo(ctx, f"Component not found in any source")
         click.echo(f"Component not found: {component}", err=True)
         raise SystemExit(1)
 
@@ -121,10 +131,13 @@ def fasteners(ctx, fastener_type):
     """List available fastener sizes."""
     from semicad.sources.warehouse import WarehouseSource
 
+    verbose_echo(ctx, "Initializing cq_warehouse source...")
     source = WarehouseSource()
+    verbose_echo(ctx, f"Querying fastener sizes for: {fastener_type}")
     json_output = ctx.obj.get("json_output", False)
 
     sizes = source.list_fastener_sizes(fastener_type)
+    verbose_echo(ctx, f"Found {len(sizes)} sizes")
 
     data = {
         "fastener_type": fastener_type,
@@ -151,10 +164,13 @@ def bearings(ctx):
     """List available bearing sizes."""
     from semicad.sources.warehouse import WarehouseSource
 
+    verbose_echo(ctx, "Initializing cq_warehouse source...")
     source = WarehouseSource()
+    verbose_echo(ctx, "Querying bearing sizes...")
     json_output = ctx.obj.get("json_output", False)
 
     sizes = source.list_bearing_sizes()
+    verbose_echo(ctx, f"Found {len(sizes)} bearing sizes")
 
     data = {
         "type": "Deep Groove Ball Bearings",
@@ -343,10 +359,17 @@ def search(ctx, query, source):
     """Search for components by name or description."""
     from semicad.core.registry import get_registry
 
+    verbose_echo(ctx, "Initializing component registry...")
     registry = get_registry()
+    verbose_echo(ctx, f"Registry sources: {registry.sources}")
     json_output = ctx.obj.get("json_output", False)
 
+    if source:
+        verbose_echo(ctx, f"Filtering by source: {source}")
+
+    verbose_echo(ctx, f"Executing search query: '{query}'")
     results = list(registry.search(query, source))
+    verbose_echo(ctx, f"Search returned {len(results)} results")
 
     data = {
         "query": query,
@@ -410,7 +433,6 @@ def parse_validate_param(value):
 
 @lib.command("validate")
 @click.argument("component")
-@click.option("--verbose", "-v", is_flag=True, help="Show detailed output")
 @click.option("--max-size", type=float, default=2000.0, help="Max dimension warning threshold (mm)")
 @click.option("--min-size", type=float, default=0.01, help="Min dimension warning threshold (mm)")
 @click.option(
@@ -419,7 +441,7 @@ def parse_validate_param(value):
     help="Component parameter as KEY=VALUE (can be repeated)",
 )
 @click.pass_context
-def validate(ctx, component, verbose, max_size, min_size, param):
+def validate(ctx, component, max_size, min_size, param):
     """
     Validate component geometry.
 
@@ -434,19 +456,31 @@ def validate(ctx, component, verbose, max_size, min_size, param):
 
     Example:
         ./bin/dev lib validate motor_2207
+
+    Use global --verbose flag for detailed issue output:
+        ./bin/dev -v lib validate motor_2207
     """
     from semicad.core.registry import get_registry
     from semicad.core.validation import IssueSeverity
 
+    verbose = ctx.obj.get("verbose", False)
+
+    verbose_echo(ctx, "Initializing component registry...")
     registry = get_registry()
+    verbose_echo(ctx, f"Registry sources: {registry.sources}")
     json_output = ctx.obj.get("json_output", False)
 
     # Parse component parameters
     comp_params = parse_validate_param(param)
 
     try:
+        verbose_echo(ctx, f"Looking up component: {component}")
+        if comp_params:
+            verbose_echo(ctx, f"With parameters: {comp_params}")
         comp = registry.get(component, **comp_params)
+        verbose_echo(ctx, f"Found in source: {comp.spec.source}")
     except KeyError:
+        verbose_echo(ctx, f"Component not found in any source")
         click.echo(f"Component not found: {component}", err=True)
         raise SystemExit(1)
     except ValueError as e:
@@ -464,7 +498,9 @@ def validate(ctx, component, verbose, max_size, min_size, param):
         raise SystemExit(1)
 
     # Run validation
+    verbose_echo(ctx, f"Running validation with max_size={max_size}, min_size={min_size}")
     result = comp.validate(max_dimension=max_size, min_dimension=min_size)
+    verbose_echo(ctx, f"Validation complete: is_valid={result.is_valid}")
 
     # Build JSON data
     data = {
