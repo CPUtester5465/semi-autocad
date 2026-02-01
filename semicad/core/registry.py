@@ -78,6 +78,41 @@ class ComponentRegistry:
             for src in self._sources.values():
                 yield from src.search(query)
 
+    def get_spec(self, name: str) -> ComponentSpec:
+        """
+        Get component spec without instantiating (no params required).
+
+        This is useful for getting metadata about parametric components
+        that require parameters to instantiate.
+
+        Args:
+            name: Component name (short or full)
+
+        Returns:
+            ComponentSpec with component metadata
+
+        Raises:
+            KeyError: If component not found
+        """
+        parts = name.split("/")
+
+        # Handle full name: source/category/name
+        if len(parts) >= 3:
+            source_name = parts[0]
+            component_name = parts[-1]
+            if source_name in self._sources:
+                for spec in self._sources[source_name].list_components():
+                    if spec.name == component_name:
+                        return spec
+
+        # Short name: search all sources
+        for source in self._sources.values():
+            for spec in source.list_components():
+                if spec.name == name:
+                    return spec
+
+        raise KeyError(f"Component not found: {name}")
+
     def get(self, full_name: str, **params) -> Component:
         """
         Get component by full name (source/category/name) or short name.
@@ -85,6 +120,10 @@ class ComponentRegistry:
         Examples:
             registry.get("custom/motor/motor_2207")
             registry.get("motor_2207")  # searches all sources
+
+        Raises:
+            KeyError: If component not found in any source
+            ValueError: If component found but missing required parameters
         """
         parts = full_name.split("/")
 
@@ -96,11 +135,23 @@ class ComponentRegistry:
                 return self._sources[source_name].get_component(component_name, **params)
 
         # Short name: search all sources
+        # Track ValueError to distinguish "not found" from "found but missing params"
+        last_value_error: ValueError | None = None
+
         for source in self._sources.values():
             try:
                 return source.get_component(full_name, **params)
-            except (KeyError, ValueError):
+            except KeyError:
+                # Component not in this source, try next
                 continue
+            except ValueError as e:
+                # Component found but has parameter issues - save error
+                last_value_error = e
+                continue
+
+        # If we got a ValueError, the component exists but needs params
+        if last_value_error is not None:
+            raise last_value_error
 
         raise KeyError(f"Component not found: {full_name}")
 

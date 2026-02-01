@@ -55,8 +55,8 @@ def info(component):
     registry = get_registry()
 
     try:
-        comp = registry.get(component)
-        spec = comp.spec
+        # Use get_spec() to avoid requiring params for parametric components
+        spec = registry.get_spec(component)
 
         click.echo(f"Component: {spec.name}")
         click.echo(f"  Source: {spec.source}")
@@ -64,9 +64,20 @@ def info(component):
         click.echo(f"  Description: {spec.description}")
 
         if spec.params:
-            click.echo("  Parameters:")
-            for k, v in spec.params.items():
-                click.echo(f"    {k}: {v}")
+            # Handle structured params (required/defaults) from electronics source
+            if "required" in spec.params:
+                required = spec.params["required"]
+                click.echo(f"  Required parameters: {', '.join(required)}")
+            if "defaults" in spec.params:
+                defaults = spec.params["defaults"]
+                click.echo("  Default parameters:")
+                for k, v in defaults.items():
+                    click.echo(f"    {k}: {v}")
+            # Handle simple params dict (from custom/warehouse sources)
+            if "required" not in spec.params and "defaults" not in spec.params:
+                click.echo("  Parameters:")
+                for k, v in spec.params.items():
+                    click.echo(f"    {k}: {v}")
 
     except KeyError:
         click.echo(f"Component not found: {component}", err=True)
@@ -137,12 +148,42 @@ def search(query, source):
         click.echo(f"\n  ... and {len(results) - 20} more results")
 
 
+def parse_validate_param(value):
+    """Parse KEY=VALUE parameter pairs into a dictionary."""
+    if not value:
+        return {}
+    params = {}
+    for item in value:
+        if "=" not in item:
+            raise click.BadParameter(f"Invalid parameter format: {item}. Use KEY=VALUE")
+        key, val = item.split("=", 1)
+        # Try to convert to appropriate type
+        try:
+            params[key] = int(val)
+        except ValueError:
+            try:
+                params[key] = float(val)
+            except ValueError:
+                if val.lower() in ("true", "yes", "1"):
+                    params[key] = True
+                elif val.lower() in ("false", "no", "0"):
+                    params[key] = False
+                else:
+                    params[key] = val
+    return params
+
+
 @lib.command("validate")
 @click.argument("component")
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed output")
 @click.option("--max-size", type=float, default=2000.0, help="Max dimension warning threshold (mm)")
 @click.option("--min-size", type=float, default=0.01, help="Min dimension warning threshold (mm)")
-def validate(component, verbose, max_size, min_size):
+@click.option(
+    "--param", "-p",
+    multiple=True,
+    help="Component parameter as KEY=VALUE (can be repeated)",
+)
+def validate(component, verbose, max_size, min_size, param):
     """
     Validate component geometry.
 
@@ -150,6 +191,10 @@ def validate(component, verbose, max_size, min_size):
     - Geometry is valid (no self-intersections)
     - Bounding box reasonable
     - Has expected features (solids, faces)
+
+    For parametric components, use --param to specify required parameters:
+
+        ./bin/dev lib validate BGA --param length=10 --param width=10
 
     Example:
         ./bin/dev lib validate motor_2207
@@ -159,13 +204,31 @@ def validate(component, verbose, max_size, min_size):
 
     registry = get_registry()
 
+    # Parse component parameters
+    comp_params = parse_validate_param(param)
+
     click.echo(f"\nValidating: {component}")
+    if comp_params:
+        click.echo(f"Parameters: {comp_params}")
     click.echo("=" * 50)
 
     try:
-        comp = registry.get(component)
+        comp = registry.get(component, **comp_params)
     except KeyError:
         click.echo(f"Component not found: {component}", err=True)
+        raise SystemExit(1)
+    except ValueError as e:
+        # Handle missing required parameters with helpful message
+        click.echo(f"Parameter error: {e}", err=True)
+        try:
+            spec = registry.get_spec(component)
+            if spec.params and "required" in spec.params:
+                click.echo(f"\nRequired parameters for {component}: {spec.params['required']}")
+                click.echo(f"\nExample:")
+                example_params = " ".join(f"-p {p}=<value>" for p in spec.params["required"])
+                click.echo(f"  ./bin/dev lib validate {component} {example_params}")
+        except KeyError:
+            pass
         raise SystemExit(1)
 
     # Run validation

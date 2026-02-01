@@ -82,6 +82,35 @@ def render(ctx, input_file, output, resolution, method):
         raise SystemExit(1)
 
 
+def parse_param(ctx, param, value):
+    """Parse KEY=VALUE parameter pairs into a dictionary."""
+    if not value:
+        return {}
+    params = {}
+    for item in value:
+        if "=" not in item:
+            raise click.BadParameter(f"Invalid parameter format: {item}. Use KEY=VALUE")
+        key, val = item.split("=", 1)
+        # Try to convert to appropriate type
+        try:
+            # Try int first
+            params[key] = int(val)
+        except ValueError:
+            try:
+                # Then float
+                params[key] = float(val)
+            except ValueError:
+                # Handle booleans
+                if val.lower() in ("true", "yes", "1"):
+                    params[key] = True
+                elif val.lower() in ("false", "no", "0"):
+                    params[key] = False
+                else:
+                    # Keep as string
+                    params[key] = val
+    return params
+
+
 @click.command()
 @click.argument("component")
 @click.option(
@@ -101,9 +130,24 @@ def render(ctx, input_file, output, resolution, method):
 )
 @click.option("--tolerance", "-t", type=float, help="Override STL linear tolerance")
 @click.option("--angular-tolerance", type=float, help="Override STL angular tolerance")
+@click.option(
+    "--param", "-p",
+    multiple=True,
+    help="Component parameter as KEY=VALUE (can be repeated)",
+)
 @click.pass_context
-def export(ctx, component, format, output, quality, tolerance, angular_tolerance):
-    """Export a component to STEP/STL."""
+def export(ctx, component, format, output, quality, tolerance, angular_tolerance, param):
+    """
+    Export a component to STEP/STL.
+
+    For parametric components, use --param to specify required parameters:
+
+        ./bin/dev export BGA --param length=10 --param width=10
+
+    Or use the short form:
+
+        ./bin/dev export BGA -p length=10 -p width=10
+    """
     from semicad.core.registry import get_registry
     from semicad.export import export_step, export_stl, STLQuality
 
@@ -111,6 +155,9 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
     output_dir = Path(output) if output else project.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     registry = get_registry()
+
+    # Parse component parameters
+    comp_params = parse_param(ctx, None, param)
 
     # Map quality string to enum
     quality_map = {
@@ -122,9 +169,11 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
     stl_quality = quality_map[quality]
 
     click.echo(f"Exporting component: {component}")
+    if comp_params:
+        click.echo(f"  Parameters: {comp_params}")
 
     try:
-        comp = registry.get(component)
+        comp = registry.get(component, **comp_params)
         geometry = comp.geometry
 
         if format in ("step", "both"):
@@ -145,6 +194,20 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
 
     except KeyError as e:
         click.echo(f"Component not found: {e}", err=True)
+        raise SystemExit(1)
+    except ValueError as e:
+        # Handle missing required parameters with helpful message
+        click.echo(f"Parameter error: {e}", err=True)
+        # Try to show available info about the component
+        try:
+            spec = registry.get_spec(component)
+            if spec.params and "required" in spec.params:
+                click.echo(f"\nRequired parameters for {component}: {spec.params['required']}")
+                click.echo(f"\nExample:")
+                example_params = " ".join(f"-p {p}=<value>" for p in spec.params["required"])
+                click.echo(f"  ./bin/dev export {component} {example_params}")
+        except KeyError:
+            pass
         raise SystemExit(1)
     except Exception as e:
         click.echo(f"Export failed: {e}", err=True)
