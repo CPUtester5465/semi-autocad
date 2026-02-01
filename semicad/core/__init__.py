@@ -5,7 +5,7 @@ Provides abstractions for components, assemblies, and projects.
 """
 
 from .component import Component, ComponentSpec
-from .registry import ComponentRegistry
+from .registry import CacheStats, ComponentRegistry
 from .project import Project
 
-__all__ = ["Component", "ComponentSpec", "ComponentRegistry", "Project"]
+__all__ = ["CacheStats", "Component", "ComponentSpec", "ComponentRegistry", "Project"]

@@ -5,8 +5,35 @@ Open/Closed: New sources can be added without modifying this class.
 Dependency Inversion: Depends on ComponentSource abstraction, not concrete sources.
 """
 
-from typing import Callable, Iterator
+from collections import OrderedDict
+from dataclasses import dataclass
+from typing import Any, Callable, Iterator
 from .component import Component, ComponentSpec
+
+
+def _make_cache_key(name: str, params: dict[str, Any]) -> str:
+    """Generate a deterministic cache key from component name and parameters."""
+    if not params:
+        return name
+    # Sort params for deterministic key generation
+    sorted_items = sorted(params.items())
+    params_str = ",".join(f"{k}={v!r}" for k, v in sorted_items)
+    return f"{name}:{params_str}"
+
+
+@dataclass
+class CacheStats:
+    """Statistics about component cache usage."""
+    hits: int
+    misses: int
+    size: int
+    max_size: int
+
+    @property
+    def hit_rate(self) -> float:
+        """Cache hit rate as a percentage."""
+        total = self.hits + self.misses
+        return (self.hits / total * 100) if total > 0 else 0.0
 
 
 class ComponentSource:
@@ -42,10 +69,21 @@ class ComponentRegistry:
     Central registry for all component sources.
 
     Single Responsibility: Aggregates multiple sources into unified interface.
+
+    Features:
+    - Component caching with LRU eviction for repeated `get()` calls
+    - Cache is keyed by component name and parameters
+    - Translated/rotated components are not cached (they wrap originals)
     """
 
-    def __init__(self):
+    DEFAULT_CACHE_SIZE = 128
+
+    def __init__(self, cache_size: int | None = None):
         self._sources: dict[str, ComponentSource] = {}
+        self._cache: OrderedDict[str, Component] = OrderedDict()
+        self._cache_max_size = cache_size if cache_size is not None else self.DEFAULT_CACHE_SIZE
+        self._cache_hits = 0
+        self._cache_misses = 0
 
     def register_source(self, source: ComponentSource) -> None:
         """Register a new component source."""
@@ -113,19 +151,53 @@ class ComponentRegistry:
 
         raise KeyError(f"Component not found: {name}")
 
-    def get(self, full_name: str, **params) -> Component:
+    def get(self, full_name: str, use_cache: bool = True, **params) -> Component:
         """
         Get component by full name (source/category/name) or short name.
+
+        Args:
+            full_name: Component name (e.g., "motor_2207" or "custom/motor/motor_2207")
+            use_cache: If True, return cached instance if available (default: True)
+            **params: Component parameters (e.g., size="M3-0.5", length=10)
+
+        Returns:
+            Component instance (may be cached if use_cache=True)
 
         Examples:
             registry.get("custom/motor/motor_2207")
             registry.get("motor_2207")  # searches all sources
+            registry.get("SocketHeadCapScrew", size="M3-0.5", length=10)
+            registry.get("motor_2207", use_cache=False)  # force new instance
 
         Raises:
             KeyError: If component not found in any source
             ValueError: If component found but missing required parameters
             ParameterValidationError: If parameter validation fails
         """
+        cache_key = _make_cache_key(full_name, params)
+
+        # Check cache first
+        if use_cache and cache_key in self._cache:
+            self._cache_hits += 1
+            # Move to end for LRU ordering
+            self._cache.move_to_end(cache_key)
+            return self._cache[cache_key]
+
+        self._cache_misses += 1
+        component = self._get_uncached(full_name, **params)
+
+        # Store in cache
+        if use_cache:
+            self._cache[cache_key] = component
+            self._cache.move_to_end(cache_key)
+            # Evict oldest if over capacity
+            while len(self._cache) > self._cache_max_size:
+                self._cache.popitem(last=False)
+
+        return component
+
+    def _get_uncached(self, full_name: str, **params) -> Component:
+        """Internal method to fetch component without cache."""
         parts = full_name.split("/")
 
         if len(parts) >= 3:
@@ -160,6 +232,31 @@ class ComponentRegistry:
             raise last_value_error
 
         raise KeyError(f"Component not found: {full_name}")
+
+    def clear_cache(self) -> int:
+        """
+        Clear all cached components.
+
+        Returns:
+            Number of items that were cleared
+        """
+        count = len(self._cache)
+        self._cache.clear()
+        return count
+
+    def cache_stats(self) -> CacheStats:
+        """
+        Get cache statistics.
+
+        Returns:
+            CacheStats with hits, misses, size, and max_size
+        """
+        return CacheStats(
+            hits=self._cache_hits,
+            misses=self._cache_misses,
+            size=len(self._cache),
+            max_size=self._cache_max_size,
+        )
 
 
 # Global registry instance
