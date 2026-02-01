@@ -14,7 +14,7 @@ from semicad.cli import get_ctx_value, verbose_echo
 
 @click.group()
 @click.pass_context
-def partcad(ctx):
+def partcad(ctx: click.Context) -> None:
     """PartCAD package manager operations.
 
     Access parts from the PartCAD public index including:
@@ -32,7 +32,7 @@ def partcad(ctx):
 @click.argument("query")
 @click.option("--limit", "-n", default=20, help="Maximum results to show")
 @click.pass_context
-def search_parts(ctx, query, limit):
+def search_parts(ctx: click.Context, query: str, limit: int) -> None:
     """Search for parts in the PartCAD index.
 
     Examples:
@@ -93,7 +93,7 @@ def search_parts(ctx, query, limit):
 @click.argument("package", required=False)
 @click.option("--recursive", "-r", is_flag=True, help="List all parts recursively")
 @click.pass_context
-def list_parts(ctx, package, recursive):
+def list_parts(ctx: click.Context, package: str | None, recursive: bool) -> None:
     """List parts in a PartCAD package.
 
     Without arguments, lists top-level packages.
@@ -150,7 +150,7 @@ def list_parts(ctx, package, recursive):
 @partcad.command("info")
 @click.argument("path")
 @click.pass_context
-def part_info(ctx, path):
+def part_info(ctx: click.Context, path: str) -> None:
     """Show detailed info about a PartCAD part.
 
     Examples:
@@ -218,7 +218,7 @@ def part_info(ctx, path):
 @partcad.command("install")
 @click.argument("package")
 @click.pass_context
-def install_package(ctx, package):
+def install_package(ctx: click.Context, package: str) -> None:
     """Pre-fetch a PartCAD package for offline use.
 
     This downloads the package to the local PartCAD cache.
@@ -288,7 +288,7 @@ def install_package(ctx, package):
 @click.option("--format", "-f", "fmt", default="png", type=click.Choice(["png", "stl", "step"]), help="Output format")
 @click.option("--size", "-s", help="Part parameters as 'key=value' pairs", multiple=True)
 @click.pass_context
-def render_part(ctx, path, output, fmt, size):
+def render_part(ctx: click.Context, path: str, output: str | None, fmt: str, size: tuple[str, ...]) -> None:
     """Render or export a PartCAD part.
 
     Examples:
@@ -308,10 +308,10 @@ def render_part(ctx, path, output, fmt, size):
             try:
                 parsed_value = int(value)
             except ValueError:
-                try:
+                try:  # noqa: SIM105 - nested int→float→string coercion is intentional
                     parsed_value = float(value)
                 except ValueError:
-                    pass  # Keep as string - SIM105 doesn't apply here
+                    pass  # Keep as string
             params[key] = parsed_value
 
     try:
@@ -337,10 +337,16 @@ def render_part(ctx, path, output, fmt, size):
         elif fmt == "png":
             # Use semicad's render if available
             try:
-                from semicad.cli.commands.build import _render_to_png
-                _render_to_png(geometry, output)
-                click.echo(f"Rendered PNG to: {output}")
-            except (ImportError, AttributeError):
+                from semicad.export.render import render_model_to_png
+                result = render_model_to_png(geometry, output)
+                if result:
+                    click.echo(f"Rendered PNG to: {output}")
+                else:
+                    # Fallback - just export STEP
+                    step_output = output.replace(".png", ".step")
+                    cq.exporters.export(geometry, step_output)
+                    click.echo(f"PNG rendering failed. Exported STEP to: {step_output}")
+            except ImportError:
                 # Fallback - just export STEP and note
                 step_output = output.replace(".png", ".step")
                 cq.exporters.export(geometry, step_output)
@@ -362,7 +368,7 @@ def render_part(ctx, path, output, fmt, size):
 @click.argument("path")
 @click.option("--param", "-p", default="size", help="Parameter name to show options for")
 @click.pass_context
-def show_sizes(ctx, path, param):
+def show_sizes(ctx: click.Context, path: str, param: str) -> None:
     """Show available sizes/options for a parametric part.
 
     Examples:

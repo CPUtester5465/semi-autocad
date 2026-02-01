@@ -7,7 +7,7 @@ SHELLS = ["bash", "zsh", "fish"]
 
 
 @click.group()
-def completion():
+def completion() -> None:
     """Shell completion utilities.
 
     Enable tab-completion for commands and arguments.
@@ -33,7 +33,7 @@ def completion():
     default=None,
     help="Override the program name (default: dev)",
 )
-def show(shell, prog_name):
+def show(shell: str, prog_name: str | None) -> None:
     """Output shell completion script.
 
     \b
@@ -66,7 +66,7 @@ def show(shell, prog_name):
 
 @completion.command("install")
 @click.argument("shell", type=click.Choice(SHELLS))
-def install(shell):
+def install(shell: str) -> None:
     """Show instructions for installing completion.
 
     \b

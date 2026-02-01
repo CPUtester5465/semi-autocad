@@ -3,6 +3,7 @@ Build commands - Generate and export CAD files.
 """
 
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -12,7 +13,7 @@ from semicad.cli import verbose_echo
 @click.command()
 @click.option("--output", "-o", type=click.Path(), help="Output directory")
 @click.pass_context
-def build(ctx, output):
+def build(ctx: click.Context, output: str | None) -> None:
     """Build all project assemblies to STEP/STL."""
     project = ctx.obj["project"]
     output_dir = Path(output) if output else project.output_dir
@@ -66,7 +67,7 @@ def build(ctx, output):
     help="Rendering method",
 )
 @click.pass_context
-def render(ctx, input_file, output, resolution, method):
+def render(ctx: click.Context, input_file: str, output: str | None, resolution: str, method: str) -> None:
     """Render STL/STEP to PNG image."""
     from semicad.export import render_stl_to_png, render_stl_to_png_blender
 
@@ -102,11 +103,13 @@ def render(ctx, input_file, output, resolution, method):
         raise SystemExit(1)
 
 
-def parse_param(ctx, param, value):
+def parse_param(
+    ctx: click.Context, param: click.Parameter | None, value: tuple[str, ...]
+) -> dict[str, Any]:
     """Parse KEY=VALUE parameter pairs into a dictionary."""
     if not value:
         return {}
-    params = {}
+    params: dict[str, Any] = {}
     for item in value:
         if "=" not in item:
             raise click.BadParameter(f"Invalid parameter format: {item}. Use KEY=VALUE")
@@ -156,7 +159,16 @@ def parse_param(ctx, param, value):
     help="Component parameter as KEY=VALUE (can be repeated)",
 )
 @click.pass_context
-def export(ctx, component, format, output, quality, tolerance, angular_tolerance, param):
+def export(
+    ctx: click.Context,
+    component: str,
+    format: str,
+    output: str | None,
+    quality: str,
+    tolerance: float | None,
+    angular_tolerance: float | None,
+    param: tuple[str, ...],
+) -> None:
     """
     Export a component to STEP/STL.
 

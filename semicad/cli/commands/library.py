@@ -3,6 +3,7 @@ Library commands - Browse and search component libraries.
 """
 
 import json
+from typing import Any
 
 import click
 
@@ -11,7 +12,7 @@ from semicad.cli import get_ctx_value, verbose_echo
 
 @click.group()
 @click.pass_context
-def lib(ctx):
+def lib(ctx: click.Context) -> None:
     """Component library operations."""
     pass
 
@@ -20,7 +21,7 @@ def lib(ctx):
 @click.option("--source", "-s", help="Filter by source (custom, cq_warehouse, etc.)")
 @click.option("--category", "-c", help="Filter by category")
 @click.pass_context
-def list_libs(ctx, source, category):
+def list_libs(ctx: click.Context, source: str | None, category: str | None) -> None:
     """List available components."""
     from semicad.core.registry import get_registry
 
@@ -30,7 +31,7 @@ def list_libs(ctx, source, category):
     json_output = get_ctx_value(ctx, "json_output", False)
 
     # Build data structure
-    data = {"sources": {}}
+    data: dict[str, Any] = {"sources": {}}
 
     for src_name in registry.sources:
         if source and src_name != source:
@@ -41,7 +42,7 @@ def list_libs(ctx, source, category):
             components = [c for c in components if c.category == category]
 
         # Group by category
-        by_category = {}
+        by_category: dict[str, list[Any]] = {}
         for comp in components:
             by_category.setdefault(comp.category, []).append(comp)
 
@@ -69,7 +70,7 @@ def list_libs(ctx, source, category):
 @lib.command("info")
 @click.argument("component")
 @click.pass_context
-def info(ctx, component):
+def info(ctx: click.Context, component: str) -> None:
     """Show detailed info about a component."""
     from semicad.core.registry import get_registry
 
@@ -127,7 +128,7 @@ def info(ctx, component):
 @lib.command("fasteners")
 @click.option("--type", "-t", "fastener_type", default="SocketHeadCapScrew", help="Fastener type")
 @click.pass_context
-def fasteners(ctx, fastener_type):
+def fasteners(ctx: click.Context, fastener_type: str) -> None:
     """List available fastener sizes."""
     from semicad.sources.warehouse import WarehouseSource
 
@@ -160,7 +161,7 @@ def fasteners(ctx, fastener_type):
 
 @lib.command("bearings")
 @click.pass_context
-def bearings(ctx):
+def bearings(ctx: click.Context) -> None:
     """List available bearing sizes."""
     from semicad.sources.warehouse import WarehouseSource
 
@@ -193,7 +194,7 @@ def bearings(ctx):
 
 @lib.command("electronics")
 @click.pass_context
-def electronics(ctx):
+def electronics(ctx: click.Context) -> None:
     """List all electronics components by category."""
     from semicad.sources.electronics import ElectronicsSource
 
@@ -203,7 +204,7 @@ def electronics(ctx):
     categories = source.list_categories()
 
     # Build data structure
-    data = {"categories": {}}
+    data: dict[str, Any] = {"categories": {}}
     for category in categories:
         data["categories"][category] = [
             {
@@ -244,7 +245,7 @@ def electronics(ctx):
 
 @lib.command("boards")
 @click.pass_context
-def boards(ctx):
+def boards(ctx: click.Context) -> None:
     """List available board components with dimensions."""
     from semicad.sources.electronics import ElectronicsSource
 
@@ -299,7 +300,7 @@ def boards(ctx):
 
 @lib.command("connectors")
 @click.pass_context
-def connectors(ctx):
+def connectors(ctx: click.Context) -> None:
     """List available connector components with specs."""
     from semicad.sources.electronics import ElectronicsSource
 
@@ -355,7 +356,7 @@ def connectors(ctx):
 @click.argument("query")
 @click.option("--source", "-s", help="Search specific source only")
 @click.pass_context
-def search(ctx, query, source):
+def search(ctx: click.Context, query: str, source: str | None) -> None:
     """Search for components by name or description."""
     from semicad.core.registry import get_registry
 
@@ -406,11 +407,11 @@ def search(ctx, query, source):
             click.echo(f"\n  ... and {len(results) - 20} more results")
 
 
-def parse_validate_param(value):
+def parse_validate_param(value: tuple[str, ...]) -> dict[str, Any]:
     """Parse KEY=VALUE parameter pairs into a dictionary."""
     if not value:
         return {}
-    params = {}
+    params: dict[str, Any] = {}
     for item in value:
         if "=" not in item:
             raise click.BadParameter(f"Invalid parameter format: {item}. Use KEY=VALUE")
@@ -441,7 +442,9 @@ def parse_validate_param(value):
     help="Component parameter as KEY=VALUE (can be repeated)",
 )
 @click.pass_context
-def validate(ctx, component, max_size, min_size, param):
+def validate(
+    ctx: click.Context, component: str, max_size: float, min_size: float, param: tuple[str, ...]
+) -> None:
     """
     Validate component geometry.
 

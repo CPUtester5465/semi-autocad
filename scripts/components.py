@@ -12,9 +12,16 @@ Usage:
     motor = Motor(size="2207")
 """
 
-import cadquery as cq
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
+
+import cadquery as cq
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    # show_object is only available in cq-editor runtime
+    def show_object(obj: Any, name: str = "") -> None: ...
 
 
 @dataclass
@@ -265,8 +272,9 @@ def get_component(name: str) -> cq.Workplane:
     if name not in COMPONENTS:
         raise ValueError(f"Unknown component: {name}. Available: {list(COMPONENTS.keys())}")
 
-    comp = COMPONENTS[name]
-    return comp["func"](**comp["args"])
+    comp: dict[str, Any] = COMPONENTS[name]
+    func = cast("Callable[..., cq.Workplane]", comp["func"])
+    return func(**comp["args"])
 
 
 # ============== TEST / VISUALIZATION ==============

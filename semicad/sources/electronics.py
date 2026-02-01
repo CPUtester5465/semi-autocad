@@ -154,7 +154,7 @@ class AssemblyInfo:
 
 # Parameter schema definitions for validation
 # Format: {"param_name": {"type": type, "min": value, "max": value, "required": bool}}
-PARAM_SCHEMAS = {
+PARAM_SCHEMAS: dict[str, dict[str, dict[str, Any]]] = {
     "RPi3b": {
         # P2.9: RPi3b supports simple parameter (defaults to True in component)
         "simple": {"type": bool},
@@ -275,7 +275,7 @@ def validate_params(component_name: str, params: dict[str, Any], strict: bool = 
             f"Invalid parameters for {component_name}:\n  - " + "\n  - ".join(errors)
         )
 
-    return validated_params  # type: ignore[return-value]
+    return validated_params
 
 
 # Hole sizes from cq_electronics.fasteners module
@@ -317,7 +317,7 @@ except ImportError:
 #       {"param": default_value},            # Dict of optional params with defaults
 #   ),
 #
-COMPONENT_CATALOG = {
+COMPONENT_CATALOG: dict[str, tuple[str, str, str, str, list[str], dict[str, Any]]] = {
     # Raspberry Pi boards
     "RPi3b": (
         "cq_electronics.rpi.rpi3b",
@@ -587,7 +587,7 @@ class ElectronicsComponent(Component):
                 # child.obj is the actual shape
                 if isinstance(child.obj, cq.Workplane):
                     return child.obj
-                else:
+                elif child.obj is not None:
                     return cq.Workplane("XY").add(child.obj)
         return None
 
@@ -675,7 +675,7 @@ class ElectronicsSource(ComponentSource):
             including required and default parameters.
         """
         for name, (cls, category, desc, required, defaults) in self._available_components.items():
-            params_info = {}
+            params_info: dict[str, Any] = {}
             if required:
                 params_info["required"] = required
             if defaults:

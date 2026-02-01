@@ -130,9 +130,11 @@ def render_stl_to_png(
         Path('part.png')
     """
     try:
+        from typing import cast
+
         import trimesh
 
-        mesh = trimesh.load(str(stl_path))
+        mesh = cast("trimesh.Trimesh", trimesh.load(str(stl_path)))
         scene = mesh.scene()
         png_data = scene.save_image(resolution=[width, height])
 

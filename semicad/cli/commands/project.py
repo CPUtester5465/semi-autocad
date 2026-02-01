@@ -18,7 +18,7 @@ from semicad.templates import (
 )
 
 
-def _clean_output_dir(output_dir, dry_run: bool = False) -> tuple[int, int]:
+def _clean_output_dir(output_dir: str | object, dry_run: bool = False) -> tuple[int, int]:
     """Clean an output directory.
 
     Args:
@@ -30,37 +30,38 @@ def _clean_output_dir(output_dir, dry_run: bool = False) -> tuple[int, int]:
     """
     from pathlib import Path
 
-    output_dir = Path(output_dir)
-    if not output_dir.exists():
+    output_path = Path(str(output_dir))
+    if not output_path.exists():
         return 0, 0
 
     files_count = 0
     bytes_count = 0
 
     # Count files and sizes
-    for item in output_dir.rglob("*"):
+    for item in output_path.rglob("*"):
         if item.is_file():
             files_count += 1
             with contextlib.suppress(OSError):
                 bytes_count += item.stat().st_size
 
     if not dry_run and files_count > 0:
-        shutil.rmtree(output_dir)
+        shutil.rmtree(output_path)
 
     return files_count, bytes_count
 
 
-def _format_size(bytes_count: int) -> str:
+def _format_size(bytes_count: int | float) -> str:
     """Format bytes as human-readable size."""
+    size = float(bytes_count)
     for unit in ["B", "KB", "MB", "GB"]:
-        if bytes_count < 1024:
-            return f"{bytes_count:.1f} {unit}"
-        bytes_count /= 1024
-    return f"{bytes_count:.1f} TB"
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
 
 
 @click.group()
-def project():
+def project() -> None:
     """Project management commands."""
     pass
 
@@ -79,7 +80,7 @@ def project():
     help="Project description"
 )
 @click.pass_context
-def new_project(ctx, name, template, description):
+def new_project(ctx: click.Context, name: str, template: str, description: str) -> None:
     """Create a new sub-project from a template.
 
     NAME is the project name (e.g., 'drone-7inch', 'controller-box').
@@ -161,7 +162,7 @@ def new_project(ctx, name, template, description):
     help="Skip confirmation prompt"
 )
 @click.pass_context
-def remove_project_cmd(ctx, name, force):
+def remove_project_cmd(ctx: click.Context, name: str, force: bool) -> None:
     """Remove a sub-project completely.
 
     This will delete the project directory and remove the entry from partcad.yaml.
@@ -236,7 +237,7 @@ def remove_project_cmd(ctx, name, force):
 
 @project.command("sync")
 @click.pass_context
-def sync_projects(ctx):
+def sync_projects(ctx: click.Context) -> None:
     """Sync partcad.yaml with actual project directories.
 
     Removes entries from partcad.yaml that point to non-existent project directories.
@@ -273,7 +274,9 @@ def sync_projects(ctx):
     help="Show what would be deleted without deleting"
 )
 @click.pass_context
-def clean_subproject(ctx, subproject, all_projects, dry_run):
+def clean_subproject(
+    ctx: click.Context, subproject: str | None, all_projects: bool, dry_run: bool
+) -> None:
     """Clean output directories from sub-projects.
 
     Removes generated STEP, STL, and BOM files from the output/ directory.
@@ -348,7 +351,7 @@ def clean_subproject(ctx, subproject, all_projects, dry_run):
 
 @project.command("info")
 @click.pass_context
-def info(ctx):
+def info(ctx: click.Context) -> None:
     """Show current project information."""
     proj = ctx.obj["project"]
     json_output = get_ctx_value(ctx, "json_output", False)
@@ -379,7 +382,7 @@ def info(ctx):
 
 @project.command("list")
 @click.pass_context
-def list_projects(ctx):
+def list_projects(ctx: click.Context) -> None:
     """List sub-projects."""
     proj = ctx.obj["project"]
     json_output = get_ctx_value(ctx, "json_output", False)
@@ -404,7 +407,7 @@ def list_projects(ctx):
 
 
 @project.command("neo4j")
-def neo4j():
+def neo4j() -> None:
     """Open Neo4j browser."""
     import webbrowser
 
@@ -421,7 +424,7 @@ def neo4j():
 @click.option("--variant", "-V", default="freestyle", help="Build variant")
 @click.option("--all-variants", is_flag=True, help="Build all variants")
 @click.pass_context
-def build_subproject(ctx, subproject, variant, all_variants):
+def build_subproject(ctx: click.Context, subproject: str, variant: str, all_variants: bool) -> None:
     """Build a sub-project."""
     import subprocess
     import sys
@@ -471,7 +474,7 @@ def build_subproject(ctx, subproject, variant, all_variants):
 @click.argument("subproject")
 @click.option("--file", "-f", default="assembly.py", help="File to open")
 @click.pass_context
-def view_subproject(ctx, subproject, file):
+def view_subproject(ctx: click.Context, subproject: str, file: str) -> None:
     """Open sub-project in cq-editor."""
     import os
     import subprocess
@@ -511,7 +514,7 @@ def view_subproject(ctx, subproject, file):
 
 @click.command()
 @click.pass_context
-def test(ctx):
+def test(ctx: click.Context) -> None:
     """Test all imports and dependencies."""
     proj = ctx.obj["project"]
     json_output = get_ctx_value(ctx, "json_output", False)
@@ -547,8 +550,8 @@ def test(ctx):
         click.echo("\n[2/5] cq_warehouse...")
     try:
         verbose_echo(ctx, "Importing cq_warehouse.fastener and cq_warehouse.bearing...")
-        from cq_warehouse.bearing import SingleRowDeepGrooveBallBearing
-        from cq_warehouse.fastener import SocketHeadCapScrew
+        from cq_warehouse.bearing import SingleRowDeepGrooveBallBearing  # noqa: F401
+        from cq_warehouse.fastener import SocketHeadCapScrew  # noqa: F401
         tests.append({"name": "cq_warehouse", "status": "ok", "message": "fasteners, bearings available"})
         if not json_output:
             click.echo("  OK - fasteners, bearings available")
@@ -649,7 +652,9 @@ def test(ctx):
 )
 @click.option("--output", "-o", type=click.Path(), help="Output directory")
 @click.pass_context
-def export_subproject(ctx, subproject, part, format, quality, output):
+def export_subproject(
+    ctx: click.Context, subproject: str, part: str | None, format: str, quality: str, output: str | None
+) -> None:
     """Export sub-project parts to STEP/STL.
 
     If PART is specified, exports just that part.
@@ -719,7 +724,7 @@ def export_subproject(ctx, subproject, part, format, quality, output):
 )
 @click.option("--output", "-o", type=click.Path(), help="Output file path")
 @click.pass_context
-def bom_subproject(ctx, subproject, format, output):
+def bom_subproject(ctx: click.Context, subproject: str, format: str, output: str | None) -> None:
     """Generate Bill of Materials for a sub-project.
 
     Runs the project's build.py which generates BOM files.

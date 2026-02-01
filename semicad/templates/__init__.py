@@ -97,7 +97,7 @@ def render_template(content: str, context: dict[str, Any]) -> str:
     return template.safe_substitute(context)
 
 
-def _clean_yaml_config(config: dict) -> dict:
+def _clean_yaml_config(config: dict[str, Any]) -> dict[str, Any]:
     """Remove None values from config to avoid 'null' in YAML output."""
     return {k: v for k, v in config.items() if v is not None}
 

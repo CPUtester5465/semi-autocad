@@ -97,7 +97,7 @@ def export_stl(
     return output_path
 
 
-def get_quality_info(quality: STLQuality) -> dict:
+def get_quality_info(quality: STLQuality) -> dict[str, str | float]:
     """Get information about a quality preset.
 
     Args:
@@ -122,6 +122,6 @@ def get_quality_info(quality: STLQuality) -> dict:
     }
 
 
-def list_quality_presets() -> list[dict]:
+def list_quality_presets() -> list[dict[str, str | float]]:
     """List all available quality presets with their settings."""
     return [get_quality_info(q) for q in STLQuality]

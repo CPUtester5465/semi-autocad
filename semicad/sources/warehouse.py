@@ -53,7 +53,7 @@ class WarehouseFastener(Component):
                 size=self._size,
                 fastener_type=self._fastener_type,
             )
-        return fastener.cq_object  # type: ignore[no-any-return]
+        return fastener.cq_object
 
 
 class WarehouseBearing(Component):
@@ -71,7 +71,7 @@ class WarehouseBearing(Component):
 
     def build(self) -> cq.Workplane:
         bearing = self._bearing_class(size=self._size)
-        return bearing.cq_object  # type: ignore[no-any-return]
+        return bearing.cq_object
 
 
 class WarehouseSource(ComponentSource):

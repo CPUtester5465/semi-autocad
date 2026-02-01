@@ -14,7 +14,7 @@ from pathlib import Path
 import click
 
 import semicad
-from semicad.core.project import Project, get_project
+from semicad.core.project import Project as Project, get_project
 
 
 def verbose_echo(ctx: click.Context, msg: str) -> None:
@@ -52,7 +52,7 @@ def get_ctx_value(ctx: click.Context, key: str, default: object = None) -> objec
 @click.option("--json", "json_output", is_flag=True, help="Output in JSON format for scripting")
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose debug output")
 @click.pass_context
-def cli(ctx, project, json_output, verbose):
+def cli(ctx: click.Context, project: str | None, json_output: bool, verbose: bool) -> None:
     """Semi-AutoCAD - AI-assisted CAD design system."""
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
@@ -94,21 +94,21 @@ cli.add_command(partcad_cmd.partcad)
 @cli.command("v")
 @click.argument("file", required=False)
 @click.pass_context
-def v_alias(ctx, file):
+def v_alias(ctx: click.Context, file: str | None) -> None:
     """Alias for 'view'."""
     ctx.invoke(view.view, file=file)
 
 
 @cli.command("b")
 @click.pass_context
-def b_alias(ctx):
+def b_alias(ctx: click.Context) -> None:
     """Alias for 'build'."""
     ctx.invoke(build.build)
 
 
 @cli.command("l")
 @click.pass_context
-def l_alias(ctx):
+def l_alias(ctx: click.Context) -> None:
     """Alias for 'lib list'."""
     ctx.invoke(library.list_libs)
 
@@ -122,7 +122,7 @@ def _get_version(package_name: str) -> str | None:
 
 
 @cli.command()
-def version():
+def version() -> None:
     """Show version information for semicad and dependencies."""
     # Core info
     click.echo(f"semicad {semicad.__version__}")

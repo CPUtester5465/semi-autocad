@@ -78,7 +78,7 @@ class PartCADComponent(Component):
         self._params = params or {}
         self._context: Any = None
 
-    def _get_context(self):
+    def _get_context(self) -> Any:
         """Lazy-load PartCAD context."""
         if self._context is None:
             import partcad
@@ -183,18 +183,18 @@ class PartCADSource(ComponentSource):
         """Infer category from part name."""
         part_lower = part_name.lower()
 
-        if any(x in part_lower for x in ["fastener", "screw", "bolt", "nut"]):
-            return "fastener"
-        if any(x in part_lower for x in ["bearing", "bushing"]):
-            return "bearing"
-        if any(x in part_lower for x in ["motor", "servo", "stepper"]):
-            return "motor"
-        if any(x in part_lower for x in ["nema"]):
-            return "motor"
-        if any(x in part_lower for x in ["board", "pcb", "arduino", "raspberry"]):
-            return "electronics"
-        if any(x in part_lower for x in ["connector", "header", "socket"]):
-            return "connector"
+        # Category keywords mapping - checked in order of specificity
+        category_keywords: list[tuple[str, list[str]]] = [
+            ("fastener", ["fastener", "screw", "bolt", "nut"]),
+            ("bearing", ["bearing", "bushing"]),
+            ("motor", ["motor", "servo", "stepper", "nema"]),
+            ("electronics", ["board", "pcb", "arduino", "raspberry"]),
+            ("connector", ["connector", "header", "socket"]),
+        ]
+
+        for category, keywords in category_keywords:
+            if any(kw in part_lower for kw in keywords):
+                return category
 
         return "other"
 
@@ -368,6 +368,7 @@ class PartCADSource(ComponentSource):
             if full_path is None:
                 raise KeyError(f"Part not found: {path}")
 
+        assert full_path is not None  # For type narrowing (guaranteed by above check)
         try:
             ctx = self._get_context()
             part = ctx.get_part(full_path)

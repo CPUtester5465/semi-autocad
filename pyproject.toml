@@ -64,6 +64,11 @@ module = "semicad.core.*"
 strict = true
 warn_unreachable = true
 
+# Allow OCC imports in validation module (optional OCC dependency)
+[[tool.mypy.overrides]]
+module = "semicad.core.validation"
+ignore_missing_imports = true
+
 # Moderate strictness for sources
 [[tool.mypy.overrides]]
 module = "semicad.sources.*"
@@ -71,9 +76,16 @@ disallow_untyped_defs = true
 check_untyped_defs = true
 
 # Basic checking for CLI (lots of Click decorators)
+# Click 8.x includes types but mypy can't infer through decorator chains
 [[tool.mypy.overrides]]
 module = "semicad.cli.*"
 check_untyped_defs = true
+disable_error_code = ["has-type"]
+
+# Moderate strictness for sources (allow returning Any from third-party libs)
+[[tool.mypy.overrides]]
+module = "semicad.sources.*"
+warn_return_any = false
 
 # Ignore missing stubs for third-party packages
 [[tool.mypy.overrides]]
@@ -83,6 +95,7 @@ module = [
     "cq_electronics.*",
     "partcad.*",
     "OCP.*",
+    "OCC.*",
     "trimesh.*",
     "yaml.*",
 ]
@@ -124,12 +137,22 @@ combine-as-imports = true
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["PLR2004"]  # Allow magic values in tests
-"scripts/*" = ["PLR2004"]  # Allow magic values in component scripts
+"scripts/*" = ["PLR2004", "I001"]  # Allow magic values, import sorting handled by ruff
 "projects/*" = ["PLR2004"]  # Allow magic values in project files
 # CLI uses lazy imports for optional dependencies - this is intentional
 "semicad/cli/*" = ["PLC0415", "E402"]
+# Sources use lazy imports for optional dependencies (cq_warehouse, cq_electronics, partcad)
+# electronics.py also uses module-level state for version caching
+"semicad/sources/*" = ["PLC0415", "PLW0603"]
+# Core uses module-level state patterns (singleton registries and project context)
+"semicad/core/project.py" = ["PLW0603"]  # Global state for current project
+"semicad/core/registry.py" = ["PLW0603", "PLC0415"]  # Global state and lazy imports
+"semicad/core/component.py" = ["PLC0415"]  # Lazy import for validation
+"semicad/core/validation.py" = ["PLC0415"]  # Lazy import of OCC.Core.BRepCheck
 # Templates use conditional imports for optional features
 "semicad/templates/*" = ["PLC0415"]
+# Export render uses lazy import of trimesh
+"semicad/export/render.py" = ["PLC0415"]
 
 [tool.ruff.format]
 quote-style = "double"
