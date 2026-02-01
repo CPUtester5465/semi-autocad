@@ -7,9 +7,13 @@ Usage:
 """
 
 import click
+import platform
+import sys
+from importlib.metadata import version as get_pkg_version, PackageNotFoundError
 from pathlib import Path
 
 from semicad.core.project import get_project, Project
+import semicad
 
 
 # Create main CLI group
@@ -67,6 +71,52 @@ def b_alias(ctx):
 def l_alias(ctx):
     """Alias for 'lib list'."""
     ctx.invoke(library.list_libs)
+
+
+def _get_version(package_name: str) -> str | None:
+    """Get version of a package, or None if not installed."""
+    try:
+        return get_pkg_version(package_name)
+    except PackageNotFoundError:
+        return None
+
+
+@cli.command()
+def version():
+    """Show version information for semicad and dependencies."""
+    # Core info
+    click.echo(f"semicad {semicad.__version__}")
+    click.echo(f"Python {sys.version.split()[0]} ({platform.system()} {platform.machine()})")
+    click.echo()
+
+    # Core dependencies
+    click.echo("Dependencies:")
+    core_packages = [
+        ("cadquery", "cadquery"),
+        ("OCP", "cadquery-ocp"),
+        ("click", "click"),
+        ("pyyaml", "pyyaml"),
+    ]
+    for display_name, pkg_name in core_packages:
+        ver = _get_version(pkg_name)
+        status = ver if ver else "not installed"
+        click.echo(f"  {display_name:<16} {status}")
+
+    click.echo()
+
+    # Optional dependencies
+    click.echo("Optional:")
+    optional_packages = [
+        ("cq-editor", "cq-editor"),
+        ("cq-warehouse", "cq-warehouse"),
+        ("cq-electronics", "cq-electronics"),
+        ("partcad", "partcad"),
+        ("trimesh", "trimesh"),
+    ]
+    for display_name, pkg_name in optional_packages:
+        ver = _get_version(pkg_name)
+        status = ver if ver else "not installed"
+        click.echo(f"  {display_name:<16} {status}")
 
 
 def main():
