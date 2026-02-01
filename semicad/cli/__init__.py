@@ -37,7 +37,7 @@ def cli(ctx, project):
 
 
 # Import and register command groups
-from semicad.cli.commands import view, build, library, project as proj_cmd
+from semicad.cli.commands import view, build, library, project as proj_cmd, completion
 
 cli.add_command(view.view)
 cli.add_command(view.edit)
@@ -48,6 +48,7 @@ cli.add_command(library.lib)
 cli.add_command(library.search)
 cli.add_command(proj_cmd.project)
 cli.add_command(proj_cmd.test)
+cli.add_command(completion.completion)
 
 
 # Quick aliases
@@ -121,7 +122,20 @@ def version():
 
 def main():
     """Entry point for the CLI."""
-    cli(obj={})
+    import os
+
+    # Determine prog_name for shell completion
+    # When invoked via bin/dev, use 'dev' as prog_name for completion
+    # When invoked via pip-installed 'semicad', use 'semicad'
+    prog_name = None
+    if os.environ.get("_DEV_COMPLETE") or os.environ.get("_SEMICAD_COMPLETE"):
+        # Completion mode - determine which name to use
+        if os.environ.get("_DEV_COMPLETE"):
+            prog_name = "dev"
+        else:
+            prog_name = "semicad"
+
+    cli(obj={}, prog_name=prog_name)
 
 
 if __name__ == "__main__":

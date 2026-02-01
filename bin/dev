@@ -13,5 +13,11 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Set PYTHONPATH for imports
 export PYTHONPATH="$PROJECT_ROOT/scripts:$PROJECT_ROOT:$PYTHONPATH"
 
+# Handle shell completion
+# Translate _DEV_COMPLETE to _SEMICAD_COMPLETE for Click's completion mechanism
+if [[ -n "${_DEV_COMPLETE:-}" ]]; then
+    export _SEMICAD_COMPLETE="$_DEV_COMPLETE"
+fi
+
 # Run the Python CLI
 exec python -m semicad --project "$PROJECT_ROOT" "$@"
