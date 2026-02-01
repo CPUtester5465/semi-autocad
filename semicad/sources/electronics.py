@@ -6,6 +6,10 @@ cq_electronics provides electronic components like:
 - Connectors (headers, RJ45)
 - SMD components (BGA)
 - Mechanical (DIN rail, clips)
+
+Also exposes utility constants:
+- HOLE_SIZES: Standard hole diameters for mounting electronics
+- COLORS: RGB color values for rendering electronic components
 """
 
 from dataclasses import dataclass, field
@@ -216,6 +220,31 @@ def validate_params(component_name: str, params: dict, strict: bool = True) -> d
         )
 
     return validated_params
+
+
+# Hole sizes from cq_electronics.fasteners module
+# These are standard metric hole diameters for mounting electronics
+HOLE_SIZES: dict[str, float] = {}
+try:
+    from cq_electronics import fasteners as _fasteners
+    HOLE_SIZES = {
+        "M2R5_TAP_HOLE": _fasteners.M2R5_TAP_HOLE_DIAMETER,
+        "M4_TAP_HOLE": _fasteners.M4_TAP_HOLE_DIAMETER,
+        "M4_CLEARANCE_NORMAL": _fasteners.M4_CLEARANCE_NORMAL_DIAMETER,
+        "M4_COUNTERSINK": _fasteners.M4_COUNTERSINK_DIAMETER,
+        "M_COUNTERSINK_ANGLE": _fasteners.M_COUNTERSINK_ANGLE,
+    }
+except ImportError:
+    pass  # cq_electronics.fasteners not available
+
+# Colors from cq_electronics.materials module
+# RGB values for rendering electronic components
+COLORS: dict[str, list[float]] = {}
+try:
+    from cq_electronics import materials as _materials
+    COLORS = dict(_materials.COLORS)
+except ImportError:
+    pass  # cq_electronics.materials not available
 
 
 # Component catalog: maps short names to import info and metadata
@@ -732,3 +761,34 @@ class ElectronicsSource(ComponentSource):
             except (KeyError, ValueError):
                 pass
         return connectors
+
+    # --- P2.11: Utility constants ---
+
+    @property
+    def hole_sizes(self) -> dict[str, float]:
+        """
+        Standard hole diameters for mounting electronics.
+
+        Returns dict with keys like:
+        - M2R5_TAP_HOLE: 2.15mm (M2.5 tap drill)
+        - M4_TAP_HOLE: 3.2mm (M4 tap drill)
+        - M4_CLEARANCE_NORMAL: 4.5mm (M4 clearance hole)
+        - M4_COUNTERSINK: 9.4mm (M4 countersink diameter)
+        - M_COUNTERSINK_ANGLE: 90 degrees
+        """
+        return HOLE_SIZES
+
+    @property
+    def colors(self) -> dict[str, list[float]]:
+        """
+        RGB color values for rendering electronic components.
+
+        Returns dict with keys like:
+        - black_plastic: dark plastic components
+        - gold_plate: gold-plated contacts
+        - pcb_substrate_chiffon: PCB substrate color
+        - solder_mask_green: green PCB solder mask
+        - stainless_steel: stainless steel parts
+        - tin_plate: tin-plated surfaces
+        """
+        return COLORS
