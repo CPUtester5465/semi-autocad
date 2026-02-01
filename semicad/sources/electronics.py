@@ -70,6 +70,15 @@ COMPONENT_CATALOG = {
         ["length"],
         {"depth": 7.5, "slots": True},
     ),
+    # Mounting
+    "PiTrayClip": (
+        "cq_electronics.sourcekit.pitray_clip",
+        "PiTrayClip",
+        "mounting",
+        "Raspberry Pi mounting tray clip for enclosures (76x20x15mm)",
+        [],
+        {},
+    ),
 }
 
 
