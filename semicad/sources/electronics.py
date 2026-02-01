@@ -648,3 +648,84 @@ class ElectronicsSource(ComponentSource):
             Parameter schema dict, or empty dict if no schema defined
         """
         return PARAM_SCHEMAS.get(name, {})
+
+    def get_board_info(self, name: str) -> dict[str, Any]:
+        """
+        Get detailed info about a board component.
+
+        Returns dict with dimensions, mounting holes, etc.
+        """
+        if name not in self._available_components:
+            raise KeyError(f"Board not found: {name}")
+
+        cls, category, desc, required, defaults = self._available_components[name]
+        if category != "board":
+            raise ValueError(f"{name} is not a board (category: {category})")
+
+        info = {
+            "name": name,
+            "description": desc,
+            "category": category,
+        }
+
+        # Extract dimension constants from class
+        for attr in ["WIDTH", "HEIGHT", "THICKNESS"]:
+            if hasattr(cls, attr):
+                info[attr.lower()] = getattr(cls, attr)
+
+        # Extract hole info
+        for attr in ["HOLE_DIAMETER", "HOLE_CENTERS_LONG", "HOLE_OFFSET_FROM_EDGE"]:
+            if hasattr(cls, attr):
+                info[attr.lower()] = getattr(cls, attr)
+
+        return info
+
+    def list_boards(self) -> list[dict[str, Any]]:
+        """List all board components with their dimensions."""
+        boards = []
+        for spec in self.list_by_category("board"):
+            try:
+                info = self.get_board_info(spec.name)
+                boards.append(info)
+            except (KeyError, ValueError):
+                pass
+        return boards
+
+    def get_connector_info(self, name: str) -> dict[str, Any]:
+        """
+        Get detailed info about a connector component.
+
+        Returns dict with parameters, pitch, etc.
+        """
+        if name not in self._available_components:
+            raise KeyError(f"Connector not found: {name}")
+
+        cls, category, desc, required, defaults = self._available_components[name]
+        if category != "connector":
+            raise ValueError(f"{name} is not a connector (category: {category})")
+
+        info = {
+            "name": name,
+            "description": desc,
+            "category": category,
+            "required_params": required,
+            "default_params": defaults,
+        }
+
+        # Extract relevant constants from class
+        for attr in ["PITCH", "PIN_WIDTH", "BASE_HEIGHT", "LENGTH_MAGNETIC", "LENGTH_NON_MAGNETIC"]:
+            if hasattr(cls, attr):
+                info[attr.lower()] = getattr(cls, attr)
+
+        return info
+
+    def list_connectors(self) -> list[dict[str, Any]]:
+        """List all connector components with their specs."""
+        connectors = []
+        for spec in self.list_by_category("connector"):
+            try:
+                info = self.get_connector_info(spec.name)
+                connectors.append(info)
+            except (KeyError, ValueError):
+                pass
+        return connectors

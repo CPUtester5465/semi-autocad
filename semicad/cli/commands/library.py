@@ -121,6 +121,122 @@ def bearings():
         click.echo(f"  ... and {len(sizes) - 20} more")
 
 
+@lib.command("electronics")
+def electronics():
+    """List all electronics components by category."""
+    from semicad.sources.electronics import ElectronicsSource
+
+    source = ElectronicsSource()
+
+    click.echo("Electronics Components (cq_electronics):")
+    click.echo("=" * 50)
+
+    categories = source.list_categories()
+    if not categories:
+        click.echo("  No electronics components available.")
+        click.echo("  (cq_electronics may not be installed)")
+        return
+
+    for category in categories:
+        click.echo(f"\n{category}:")
+        for spec in source.list_by_category(category):
+            # Show required params if any
+            required = spec.params.get("required", [])
+            if required:
+                params_str = f" (required: {', '.join(required)})"
+            else:
+                params_str = ""
+            click.echo(f"  - {spec.name}{params_str}")
+            if spec.description:
+                click.echo(f"      {spec.description}")
+
+    click.echo("\nUse 'lib boards' or 'lib connectors' for detailed specs.")
+
+
+@lib.command("boards")
+def boards():
+    """List available board components with dimensions."""
+    from semicad.sources.electronics import ElectronicsSource
+
+    source = ElectronicsSource()
+
+    click.echo("Electronic Boards:")
+    click.echo("=" * 50)
+
+    board_list = source.list_boards()
+    if not board_list:
+        click.echo("  No boards available.")
+        return
+
+    for board in board_list:
+        click.echo(f"\n{board['name']}:")
+        click.echo(f"  {board.get('description', '')}")
+
+        # Dimensions
+        width = board.get("width")
+        height = board.get("height")
+        thickness = board.get("thickness")
+        if width and height:
+            dims = f"  Dimensions: {width} x {height}"
+            if thickness:
+                dims += f" x {thickness}"
+            dims += " mm"
+            click.echo(dims)
+
+        # Mounting holes
+        hole_dia = board.get("hole_diameter")
+        if hole_dia:
+            click.echo(f"  Mounting holes: M{hole_dia:.1f}")
+
+        hole_spacing = board.get("hole_centers_long")
+        hole_offset = board.get("hole_offset_from_edge")
+        if hole_spacing and hole_offset:
+            click.echo(f"  Hole spacing: {hole_spacing}mm (long), offset {hole_offset}mm from edge")
+
+    click.echo(f"\nExample usage:")
+    click.echo('  registry.get("RPi3b")')
+
+
+@lib.command("connectors")
+def connectors():
+    """List available connector components with specs."""
+    from semicad.sources.electronics import ElectronicsSource
+
+    source = ElectronicsSource()
+
+    click.echo("Electronic Connectors:")
+    click.echo("=" * 50)
+
+    connector_list = source.list_connectors()
+    if not connector_list:
+        click.echo("  No connectors available.")
+        return
+
+    for conn in connector_list:
+        click.echo(f"\n{conn['name']}:")
+        click.echo(f"  {conn.get('description', '')}")
+
+        # Show pitch if available
+        pitch = conn.get("pitch")
+        if pitch:
+            click.echo(f"  Pitch: {pitch}mm")
+
+        # Show required params
+        required = conn.get("required_params", [])
+        if required:
+            click.echo(f"  Required params: {', '.join(required)}")
+
+        # Show defaults
+        defaults = conn.get("default_params", {})
+        if defaults:
+            defaults_str = ", ".join(f"{k}={v}" for k, v in defaults.items())
+            click.echo(f"  Defaults: {defaults_str}")
+
+    click.echo(f"\nExample usage:")
+    click.echo('  registry.get("PinHeader", rows=2, columns=20)')
+    click.echo('  registry.get("JackSurfaceMount")')
+
+
 @click.command()
 @click.argument("query")
 @click.option("--source", "-s", help="Search specific source only")
