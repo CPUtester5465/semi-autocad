@@ -2,6 +2,8 @@
 Project commands - Project management and testing.
 """
 
+import shutil
+
 import click
 
 from semicad.templates import (
@@ -11,6 +13,49 @@ from semicad.templates import (
     remove_project,
     sync_partcad,
 )
+
+
+def _clean_output_dir(output_dir, dry_run: bool = False) -> tuple[int, int]:
+    """Clean an output directory.
+
+    Args:
+        output_dir: Path to the output directory
+        dry_run: If True, don't actually delete, just count
+
+    Returns:
+        Tuple of (files_count, bytes_count) of deleted/would-delete items.
+    """
+    from pathlib import Path
+
+    output_dir = Path(output_dir)
+    if not output_dir.exists():
+        return 0, 0
+
+    files_count = 0
+    bytes_count = 0
+
+    # Count files and sizes
+    for item in output_dir.rglob("*"):
+        if item.is_file():
+            files_count += 1
+            try:
+                bytes_count += item.stat().st_size
+            except OSError:
+                pass  # File might be inaccessible
+
+    if not dry_run and files_count > 0:
+        shutil.rmtree(output_dir)
+
+    return files_count, bytes_count
+
+
+def _format_size(bytes_count: int) -> str:
+    """Format bytes as human-readable size."""
+    for unit in ["B", "KB", "MB", "GB"]:
+        if bytes_count < 1024:
+            return f"{bytes_count:.1f} {unit}"
+        bytes_count /= 1024
+    return f"{bytes_count:.1f} TB"
 
 
 @click.group()
@@ -201,6 +246,92 @@ def sync_projects(ctx):
             click.echo(f"  - {name}")
     else:
         click.echo("No stale entries found. partcad.yaml is in sync.")
+
+
+@project.command("clean")
+@click.argument("subproject", required=False)
+@click.option(
+    "--all", "all_projects",
+    is_flag=True,
+    help="Clean all sub-projects"
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Show what would be deleted without deleting"
+)
+@click.pass_context
+def clean_subproject(ctx, subproject, all_projects, dry_run):
+    """Clean output directories from sub-projects.
+
+    Removes generated STEP, STL, and BOM files from the output/ directory.
+    Useful for cleaning up before rebuilding.
+
+    Examples:
+
+        ./bin/dev project clean quadcopter-5inch
+
+        ./bin/dev project clean --all
+
+        ./bin/dev project clean enclosure-test --dry-run
+    """
+    proj = ctx.obj["project"]
+
+    # Validate arguments
+    if not subproject and not all_projects:
+        click.echo("Error: Specify a sub-project name or use --all", err=True)
+        click.echo(f"Available: {proj.list_subprojects()}")
+        raise SystemExit(1)
+
+    if subproject and all_projects:
+        click.echo("Error: Cannot specify both a sub-project and --all", err=True)
+        raise SystemExit(1)
+
+    # Determine which projects to clean
+    if all_projects:
+        projects_to_clean = proj.list_subprojects()
+        if not projects_to_clean:
+            click.echo("No sub-projects found.")
+            return
+    else:
+        # Validate subproject exists
+        subproject_dir = proj.projects_dir / subproject
+        if not subproject_dir.exists():
+            click.echo(f"Sub-project not found: {subproject}", err=True)
+            click.echo(f"Available: {proj.list_subprojects()}")
+            raise SystemExit(1)
+        projects_to_clean = [subproject]
+
+    # Clean each project
+    total_files = 0
+    total_bytes = 0
+    cleaned_projects = []
+
+    action = "Would remove" if dry_run else "Cleaning"
+
+    for project_name in projects_to_clean:
+        output_dir = proj.projects_dir / project_name / "output"
+
+        files_count, bytes_count = _clean_output_dir(output_dir, dry_run=dry_run)
+
+        if files_count > 0:
+            cleaned_projects.append(project_name)
+            total_files += files_count
+            total_bytes += bytes_count
+            click.echo(f"{action}: {project_name}/output/ ({files_count} files, {_format_size(bytes_count)})")
+        elif len(projects_to_clean) == 1:
+            # Only show "nothing to clean" for single project
+            click.echo(f"Nothing to clean in {project_name}/output/")
+
+    # Summary for multiple projects
+    if all_projects and cleaned_projects:
+        click.echo()
+        if dry_run:
+            click.echo(f"Would remove {total_files} files ({_format_size(total_bytes)}) from {len(cleaned_projects)} projects")
+        else:
+            click.echo(f"Cleaned {total_files} files ({_format_size(total_bytes)}) from {len(cleaned_projects)} projects")
+    elif all_projects and not cleaned_projects:
+        click.echo("All sub-projects are already clean.")
 
 
 @project.command("info")
