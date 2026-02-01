@@ -84,7 +84,66 @@ Claude Code (Orchestrator)
 |--------|------------|-------------|
 | `custom` | 16 | Drone parts (motors, FC, ESC, batteries, props) |
 | `cq_warehouse` | 1000+ | Fasteners, bearings, chains, sprockets |
-| `cq_electronics` | varies | RPi boards, connectors |
+| `cq_electronics` | 7 | Electronic boards, connectors, SMD, mechanical, mounting |
+
+## cq_electronics Components
+
+Electronic component library for enclosure design and PCB integration.
+
+### Available Components
+
+| Name | Category | Description | Required Params |
+|------|----------|-------------|-----------------|
+| `RPi3b` | board | Raspberry Pi 3B SBC | - |
+| `PinHeader` | connector | Through-hole pin header | - |
+| `JackSurfaceMount` | connector | RJ45 Ethernet jack | - |
+| `BGA` | smd | Ball Grid Array package | `length`, `width` |
+| `DinClip` | mechanical | DIN rail mounting clip | - |
+| `TopHat` | mechanical | TH35 DIN rail section | `length` |
+| `PiTrayClip` | mounting | Raspberry Pi mounting tray clip | - |
+
+### Electronics Usage
+
+```python
+from semicad import get_registry
+
+registry = get_registry()
+
+# Get Raspberry Pi board
+rpi = registry.get("RPi3b")
+
+# Parametric pin header (2x20 GPIO header)
+header = registry.get("PinHeader", rows=2, columns=20)
+
+# BGA chip package (required: length, width)
+chip = registry.get("BGA", length=10, width=10, height=1.2)
+
+# DIN rail section
+rail = registry.get("TopHat", length=100)
+
+# Access geometry for positioning
+geometry = rpi.geometry  # CadQuery Workplane
+```
+
+### Parameter Reference
+
+**PinHeader** (all optional):
+- `rows`: Number of rows (default: 1)
+- `columns`: Number of columns (default: 1)
+- `above`: Pin height above board in mm (default: 7)
+- `below`: Pin height below board in mm (default: 3)
+- `simple`: Use simplified geometry (default: True)
+
+**BGA** (length/width required):
+- `length`: Package length in mm (required)
+- `width`: Package width in mm (required)
+- `height`: Package height in mm (default: 1)
+- `simple`: Use simplified geometry (default: True)
+
+**TopHat** (length required):
+- `length`: Rail length in mm (required)
+- `depth`: Rail depth in mm (default: 7.5)
+- `slots`: Include mounting slots (default: True)
 
 ## Usage in Code
 
@@ -111,6 +170,7 @@ motor_positioned = motor.translate(50, 50, 0)
 
 ## Documentation
 
+- [cq_electronics Integration](/docs/electronics.md)
 - [CQ-Editor Multi-File Setup](/docs/cq-editor-multifile.md)
 - [MCP Research](/.reports/mcp-research-20260131.md)
 - [Stack Decision](/.reports/mvp-decision-cadquery-20260131.md)

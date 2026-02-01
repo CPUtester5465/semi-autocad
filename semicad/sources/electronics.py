@@ -1,15 +1,30 @@
 """
 cq_electronics source - Adapts cq_electronics to ComponentSource.
 
-cq_electronics provides electronic components like:
-- Raspberry Pi boards
-- Connectors (headers, RJ45)
-- SMD components (BGA)
-- Mechanical (DIN rail, clips)
+This module provides access to electronic components from the cq_electronics
+library through the semicad registry system.
+
+Available component categories:
+    - board: Single-board computers (RPi3b)
+    - connector: Pin headers, RJ45 jacks (PinHeader, JackSurfaceMount)
+    - smd: Surface-mount packages (BGA)
+    - mechanical: DIN rail components (TopHat, DinClip)
+    - mounting: Enclosure mounting clips (PiTrayClip)
 
 Also exposes utility constants:
-- HOLE_SIZES: Standard hole diameters for mounting electronics
-- COLORS: RGB color values for rendering electronic components
+    - HOLE_SIZES: Standard hole diameters for mounting electronics
+    - COLORS: RGB color values for rendering electronic components
+
+Usage:
+    from semicad import get_registry
+
+    registry = get_registry()
+    rpi = registry.get("RPi3b")
+    header = registry.get("PinHeader", rows=2, columns=20)
+
+See Also:
+    - docs/electronics.md for full documentation
+    - COMPONENT_CATALOG for available components and parameters
 """
 
 import warnings
@@ -290,7 +305,19 @@ except ImportError:
 
 
 # Component catalog: maps short names to import info and metadata
+#
 # Format: (module_path, class_name, category, description, required_params, default_params)
+#
+# To add a new component:
+#   "ComponentName": (
+#       "cq_electronics.module.submodule",  # Full import path
+#       "ClassName",                         # Class to import
+#       "category",                          # One of: board, connector, smd, mechanical
+#       "Component description",             # Human-readable description
+#       ["required_param"],                  # List of required parameter names
+#       {"param": default_value},            # Dict of optional params with defaults
+#   ),
+#
 COMPONENT_CATALOG = {
     # Raspberry Pi boards
     "RPi3b": (
@@ -360,12 +387,31 @@ class ElectronicsComponent(Component):
     """
     Component backed by cq_electronics library.
 
+    Wraps cq_electronics objects and normalizes their geometry output to
+    cq.Workplane for consistent handling across the semicad system.
+
     Preserves assembly structure when available. Access the original
     assembly via the `assembly` property, or get assembly metadata
     via `assembly_info`.
+
+    Attributes:
+        spec: ComponentSpec with name, source, category, and parameters.
+        geometry: CadQuery Workplane (lazy-built on first access).
+        assembly: Original cq.Assembly if component is assembly-based.
+        metadata: Dict of UPPER_CASE constants from the component class.
+        mounting_holes: List of (x, y) mounting hole locations.
+        dimensions: Tuple of (width, height, depth) if available.
     """
 
     def __init__(self, spec: ComponentSpec, component_class: type, params: dict):
+        """
+        Initialize an electronics component.
+
+        Args:
+            spec: Component specification with metadata.
+            component_class: The cq_electronics class to instantiate.
+            params: Parameters to pass to the component constructor.
+        """
         super().__init__(spec)
         self._component_class = component_class
         self._params = params
@@ -380,7 +426,16 @@ class ElectronicsComponent(Component):
         return self._instance
 
     def build(self) -> cq.Workplane:
-        """Build the component geometry."""
+        """
+        Build the component geometry.
+
+        Instantiates the cq_electronics component and converts the result
+        to a CadQuery Workplane. Handles both Assembly and Workplane outputs.
+        Preserves the original Assembly for later access via `.assembly`.
+
+        Returns:
+            CadQuery Workplane containing the component geometry.
+        """
         instance = self._ensure_instance()
 
         # Get the geometry - cq_object is either Assembly or Workplane
@@ -552,30 +607,50 @@ class ElectronicsComponent(Component):
 
 class ElectronicsSource(ComponentSource):
     """
-    Source for cq_electronics components.
+    Source adapter for cq_electronics components.
 
-    Provides access to:
-    - Raspberry Pi boards (RPi3b)
-    - Connectors (PinHeader, JackSurfaceMount)
-    - SMD components (BGA)
-    - Mechanical parts (DinClip, TopHat/DIN rail)
+    Implements the ComponentSource interface to provide access to electronic
+    components through the semicad registry.
+
+    Available categories:
+        - board: Single-board computers (RPi3b)
+        - connector: Pin headers, RJ45 jacks (PinHeader, JackSurfaceMount)
+        - smd: Surface-mount packages (BGA)
+        - mechanical: DIN rail parts (DinClip, TopHat)
+        - mounting: Enclosure clips (PiTrayClip)
+
+    Components are loaded dynamically from cq_electronics at initialization.
+    If cq_electronics is not installed, this source provides no components.
 
     Version compatibility:
-    - Minimum cq_electronics version: 0.2.0
-    - Tested with cadquery 2.5.x
+        - Minimum cq_electronics version: 0.2.0
+        - Tested with cadquery 2.5.x
+
+    Example:
+        source = ElectronicsSource()
+        rpi = source.get_component("RPi3b")
+        header = source.get_component("PinHeader", rows=2, columns=20)
     """
 
     def __init__(self):
+        """Initialize the electronics source, loading available components."""
         self._available_components: dict[str, tuple] = {}
         self._version = _check_version()
         self._load_components()
 
     @property
     def name(self) -> str:
+        """Source identifier used in component specs."""
         return "cq_electronics"
 
     def _load_components(self) -> None:
-        """Load available components from cq_electronics."""
+        """
+        Load available components from cq_electronics.
+
+        Iterates through COMPONENT_CATALOG and attempts to import each
+        component. Components that fail to import are silently skipped,
+        allowing graceful degradation if cq_electronics is partial or missing.
+        """
         for name, catalog_entry in COMPONENT_CATALOG.items():
             module_path, class_name, category, desc, required, defaults = catalog_entry
             try:
@@ -588,7 +663,13 @@ class ElectronicsSource(ComponentSource):
                 pass
 
     def list_components(self) -> Iterator[ComponentSpec]:
-        """List all available electronic components."""
+        """
+        List all available electronic components.
+
+        Yields:
+            ComponentSpec for each available component with metadata
+            including required and default parameters.
+        """
         for name, (cls, category, desc, required, defaults) in self._available_components.items():
             params_info = {}
             if required:
@@ -623,10 +704,14 @@ class ElectronicsSource(ComponentSource):
         - Individual sub-parts via `.get_part(name)`
 
         Args:
-            name: Component name (e.g., "PinHeader", "BGA")
+            name: Component name (e.g., "RPi3b", "PinHeader", "BGA").
             strict: If True (default), raise error on unknown params.
                     If False, unknown params are silently filtered out.
-            **params: Component parameters
+            **params: Component parameters. Required params must be provided;
+                optional params use defaults from COMPONENT_CATALOG.
+
+        Returns:
+            ElectronicsComponent with the requested configuration.
 
         Examples:
             # Basic usage
@@ -702,14 +787,27 @@ class ElectronicsSource(ComponentSource):
         return ElectronicsComponent(spec, cls, final_params)
 
     def list_categories(self) -> list[str]:
-        """List available component categories."""
+        """
+        List available component categories.
+
+        Returns:
+            Sorted list of category names (e.g., ["board", "connector", "mechanical", "smd"]).
+        """
         categories = set()
         for _, (_, category, _, _, _) in self._available_components.items():
             categories.add(category)
         return sorted(categories)
 
     def list_by_category(self, category: str) -> Iterator[ComponentSpec]:
-        """List components in a specific category."""
+        """
+        List components in a specific category.
+
+        Args:
+            category: Category name (board, connector, smd, mechanical).
+
+        Yields:
+            ComponentSpec for each component in the specified category.
+        """
         for spec in self.list_components():
             if spec.category == category:
                 yield spec
