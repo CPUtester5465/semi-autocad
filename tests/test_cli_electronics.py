@@ -273,11 +273,12 @@ class TestLibValidateCommand:
         assert "Bounding box" in result.output or "Solids" in result.output
 
     def test_lib_validate_verbose(self, mock_cq_electronics):
-        """lib validate --verbose should show extra details."""
-        from semicad.cli.commands.library import lib
+        """lib validate with verbose context should show extra details."""
+        from semicad.cli import cli
 
         runner = CliRunner()
-        result = runner.invoke(lib, ["validate", "RPi3b", "--verbose"])
+        # Use full CLI invocation with --verbose flag before subcommand
+        result = runner.invoke(cli, ["--verbose", "lib", "validate", "RPi3b"])
 
         assert result.exit_code == 0
 

@@ -2,12 +2,13 @@
 Project commands - Project management and testing.
 """
 
+import contextlib
 import json
 import shutil
 
 import click
 
-from semicad.cli import verbose_echo
+from semicad.cli import get_ctx_value, verbose_echo
 from semicad.templates import (
     TEMPLATES,
     remove_project,
@@ -40,10 +41,8 @@ def _clean_output_dir(output_dir, dry_run: bool = False) -> tuple[int, int]:
     for item in output_dir.rglob("*"):
         if item.is_file():
             files_count += 1
-            try:
+            with contextlib.suppress(OSError):
                 bytes_count += item.stat().st_size
-            except OSError:
-                pass  # File might be inaccessible
 
     if not dry_run and files_count > 0:
         shutil.rmtree(output_dir)
@@ -147,11 +146,11 @@ def new_project(ctx, name, template, description):
     except ValueError as e:
         verbose_echo(ctx, f"ValueError: {e}")
         click.echo(f"Error: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except Exception as e:
         verbose_echo(ctx, f"Exception: {type(e).__name__}: {e}")
         click.echo(f"Error creating project: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @project.command("remove")
@@ -229,10 +228,10 @@ def remove_project_cmd(ctx, name, force):
 
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except Exception as e:
         click.echo(f"Error removing project: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @project.command("sync")
@@ -352,7 +351,7 @@ def clean_subproject(ctx, subproject, all_projects, dry_run):
 def info(ctx):
     """Show current project information."""
     proj = ctx.obj["project"]
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     subprojects = proj.list_subprojects()
 
@@ -383,7 +382,7 @@ def info(ctx):
 def list_projects(ctx):
     """List sub-projects."""
     proj = ctx.obj["project"]
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     subprojects = proj.list_subprojects()
 
@@ -460,7 +459,7 @@ def build_subproject(ctx, subproject, variant, all_variants):
     verbose_echo(ctx, f"Running command: {' '.join(cmd)}")
     verbose_echo(ctx, f"Working directory: {subproject_dir}")
 
-    result = subprocess.run(cmd, cwd=str(subproject_dir))
+    result = subprocess.run(cmd, cwd=str(subproject_dir), check=False)
 
     verbose_echo(ctx, f"Build script exit code: {result.returncode}")
 
@@ -507,7 +506,7 @@ def view_subproject(ctx, subproject, file):
     verbose_echo(ctx, f"Running: cq-editor {target_file}")
 
     click.echo(f"Opening cq-editor: {target_file}")
-    subprocess.run(["cq-editor", str(target_file)], env=env)
+    subprocess.run(["cq-editor", str(target_file)], env=env, check=False)
 
 
 @click.command()
@@ -515,7 +514,7 @@ def view_subproject(ctx, subproject, file):
 def test(ctx):
     """Test all imports and dependencies."""
     proj = ctx.obj["project"]
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     verbose_echo(ctx, f"Project root: {proj.root}")
     verbose_echo(ctx, f"Scripts dir: {proj.scripts_dir}")
@@ -702,7 +701,7 @@ def export_subproject(ctx, subproject, part, format, quality, output):
     verbose_echo(ctx, f"Running command: {' '.join(cmd)}")
     verbose_echo(ctx, f"Working directory: {subproject_dir}")
 
-    result = subprocess.run(cmd, cwd=str(subproject_dir))
+    result = subprocess.run(cmd, cwd=str(subproject_dir), check=False)
 
     verbose_echo(ctx, f"Build script exit code: {result.returncode}")
 
@@ -780,7 +779,7 @@ def bom_subproject(ctx, subproject, format, output):
         verbose_echo(ctx, f"Running command: {' '.join(cmd)}")
         verbose_echo(ctx, f"Working directory: {subproject_dir}")
 
-        result = subprocess.run(cmd, cwd=str(subproject_dir), capture_output=True, text=True)
+        result = subprocess.run(cmd, cwd=str(subproject_dir), capture_output=True, text=True, check=False)
 
         verbose_echo(ctx, f"Build script exit code: {result.returncode}")
 

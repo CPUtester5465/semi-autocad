@@ -39,6 +39,7 @@ def build(ctx, output):
             ["python", str(build_script)],
             env=env,
             cwd=str(project.root),
+            check=False,
         )
 
         verbose_echo(ctx, f"Build script exit code: {result.returncode}")
@@ -234,7 +235,7 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
     except KeyError as e:
         verbose_echo(ctx, "Component lookup failed in all sources")
         click.echo(f"Component not found: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except ValueError as e:
         # Handle missing required parameters with helpful message
         click.echo(f"Parameter error: {e}", err=True)
@@ -248,8 +249,8 @@ def export(ctx, component, format, output, quality, tolerance, angular_tolerance
                 click.echo(f"  ./bin/dev export {component} {example_params}")
         except KeyError:
             pass
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except Exception as e:
         verbose_echo(ctx, f"Exception type: {type(e).__name__}")
         click.echo(f"Export failed: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

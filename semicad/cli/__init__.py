@@ -17,10 +17,33 @@ import semicad
 from semicad.core.project import Project, get_project
 
 
-def verbose_echo(ctx, msg):
-    """Print debug message if verbose mode is enabled."""
-    if ctx.obj.get("verbose"):
+def verbose_echo(ctx: click.Context, msg: str) -> None:
+    """Print debug message if verbose mode is enabled.
+
+    Args:
+        ctx: Click context object (may have None obj in tests)
+        msg: Message to print when verbose mode is enabled
+    """
+    if ctx.obj and ctx.obj.get("verbose"):
         click.echo(click.style(f"[verbose] {msg}", dim=True))
+
+
+def get_ctx_value(ctx: click.Context, key: str, default: object = None) -> object:
+    """Safely get a value from the Click context object.
+
+    Handles the case where ctx.obj is None (e.g., in tests).
+
+    Args:
+        ctx: Click context object
+        key: Key to look up in ctx.obj
+        default: Default value if key not found or ctx.obj is None
+
+    Returns:
+        The value from ctx.obj[key] or the default
+    """
+    if ctx.obj is None:
+        return default
+    return ctx.obj.get(key, default)
 
 
 # Create main CLI group
@@ -136,7 +159,7 @@ def version():
         click.echo(f"  {display_name:<16} {status}")
 
 
-def main():
+def main() -> None:
     """Entry point for the CLI."""
     import os
 

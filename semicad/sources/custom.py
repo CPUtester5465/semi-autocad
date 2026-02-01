@@ -2,7 +2,8 @@
 Custom component source - Adapts scripts/components.py to ComponentSource.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from typing import Any
 
 import cadquery as cq
 
@@ -13,7 +14,12 @@ from semicad.core.registry import ComponentSource
 class CustomComponent(Component):
     """Component backed by our custom generator functions."""
 
-    def __init__(self, spec: ComponentSpec, generator: callable, params: dict):
+    def __init__(
+        self,
+        spec: ComponentSpec,
+        generator: Callable[..., cq.Workplane],
+        params: dict[str, Any],
+    ) -> None:
         super().__init__(spec)
         self._generator = generator
         self._params = params
@@ -29,12 +35,12 @@ class CustomSource(ComponentSource):
     Adapts the existing COMPONENTS dict to our interface.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Import the existing components module
         try:
             from scripts.components import COMPONENTS, MOUNT_PATTERNS
-            self._components = COMPONENTS
-            self._mount_patterns = MOUNT_PATTERNS
+            self._components: dict[str, Any] = COMPONENTS
+            self._mount_patterns: dict[str, Any] = MOUNT_PATTERNS
         except ImportError:
             self._components = {}
             self._mount_patterns = {}
@@ -68,7 +74,7 @@ class CustomSource(ComponentSource):
                 description=f"Custom {self._categorize(name)} component",
             )
 
-    def get_component(self, name: str, **override_params) -> Component:
+    def get_component(self, name: str, **override_params: Any) -> Component:
         """Get a component by name."""
         if name not in self._components:
             raise KeyError(f"Component not found: {name}")

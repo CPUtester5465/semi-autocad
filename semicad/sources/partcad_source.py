@@ -72,11 +72,11 @@ class PartCADComponent(Component):
         spec: ComponentSpec,
         partcad_path: str,
         params: dict[str, Any] | None = None,
-    ):
+    ) -> None:
         super().__init__(spec)
         self._partcad_path = partcad_path
         self._params = params or {}
-        self._context = None
+        self._context: Any = None
 
     def _get_context(self):
         """Lazy-load PartCAD context."""
@@ -123,7 +123,7 @@ class PartCADSource(ComponentSource):
     First access may require network to clone package repositories.
     """
 
-    def __init__(self, packages: list[str] | None = None):
+    def __init__(self, packages: list[str] | None = None) -> None:
         """
         Initialize PartCAD source.
 
@@ -131,15 +131,15 @@ class PartCADSource(ComponentSource):
             packages: List of package paths to index. Defaults to common packages.
         """
         self._packages = packages or DEFAULT_PACKAGES
-        self._context = None
-        self._indexed_parts: dict[str, dict] = {}  # path -> config
+        self._context: Any = None
+        self._indexed_parts: dict[str, dict[str, Any]] = {}  # path -> config
         self._initialized = False
 
     @property
     def name(self) -> str:
         return "partcad"
 
-    def _get_context(self):
+    def _get_context(self) -> Any:
         """Lazy-load PartCAD context."""
         if self._context is None:
             try:
@@ -198,7 +198,7 @@ class PartCADSource(ComponentSource):
 
         return "other"
 
-    def _get_description(self, part_name: str, config: dict) -> str:
+    def _get_description(self, part_name: str, config: dict[str, Any]) -> str:
         """Get description from part config or generate one."""
         if "desc" in config:
             return config["desc"]
@@ -237,7 +237,7 @@ class PartCADSource(ComponentSource):
                 },
             )
 
-    def get_component(self, name: str, **params) -> Component:
+    def get_component(self, name: str, **params: Any) -> Component:
         """
         Get a PartCAD component by name or path.
 
@@ -287,7 +287,7 @@ class PartCADSource(ComponentSource):
             if part is None:
                 raise KeyError(f"PartCAD returned None for: {full_path}")
         except Exception as e:
-            raise KeyError(f"Failed to load PartCAD part {full_path}: {e}")
+            raise KeyError(f"Failed to load PartCAD part {full_path}: {e}") from e
 
         # Build the spec
         package, part_name = _parse_part_path(full_path)
@@ -386,7 +386,7 @@ class PartCADSource(ComponentSource):
                 "manufacturable": config.get("manufacturable", False),
             }
         except Exception as e:
-            raise KeyError(f"Failed to get part info for {path}: {e}")
+            raise KeyError(f"Failed to get part info for {path}: {e}") from e
 
     def get_available_sizes(self, path: str, param_name: str = "size") -> list[str]:
         """

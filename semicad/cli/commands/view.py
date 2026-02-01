@@ -48,10 +48,10 @@ def view(ctx, file):
     verbose_echo(ctx, f"Running: cq-editor {file}")
 
     try:
-        subprocess.run(["cq-editor", str(file)], env=env)
+        subprocess.run(["cq-editor", str(file)], env=env, check=False)
     except FileNotFoundError:
         click.echo("cq-editor not found. Install with: pip install cq-editor", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @click.command()
@@ -73,4 +73,4 @@ def edit(ctx, file):
     editor = os.environ.get("EDITOR", "nano")
     verbose_echo(ctx, f"Using editor: {editor}")
     verbose_echo(ctx, f"Running: {editor} {file}")
-    subprocess.run([editor, str(file)])
+    subprocess.run([editor, str(file)], check=False)

@@ -80,7 +80,7 @@ def _check_version() -> str | None:
 
 def _extract_class_constants(obj: Any) -> dict[str, Any]:
     """Extract UPPER_CASE class constants from an object."""
-    metadata = {}
+    metadata: dict[str, Any] = {}
     for name in dir(obj):
         if name.isupper() and not name.startswith("_"):
             try:
@@ -196,7 +196,7 @@ class ParameterValidationError(ValueError):
     pass
 
 
-def validate_params(component_name: str, params: dict, strict: bool = True) -> dict:
+def validate_params(component_name: str, params: dict[str, Any], strict: bool = True) -> dict[str, Any]:
     """
     Validate parameters for a component and return filtered params.
 
@@ -275,7 +275,7 @@ def validate_params(component_name: str, params: dict, strict: bool = True) -> d
             f"Invalid parameters for {component_name}:\n  - " + "\n  - ".join(errors)
         )
 
-    return validated_params
+    return validated_params  # type: ignore[return-value]
 
 
 # Hole sizes from cq_electronics.fasteners module
@@ -402,7 +402,12 @@ class ElectronicsComponent(Component):
         dimensions: Tuple of (width, height, depth) if available.
     """
 
-    def __init__(self, spec: ComponentSpec, component_class: type, params: dict):
+    def __init__(
+        self,
+        spec: ComponentSpec,
+        component_class: type[Any],
+        params: dict[str, Any],
+    ) -> None:
         """
         Initialize an electronics component.
 
@@ -631,9 +636,9 @@ class ElectronicsSource(ComponentSource):
         header = source.get_component("PinHeader", rows=2, columns=20)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the electronics source, loading available components."""
-        self._available_components: dict[str, tuple] = {}
+        self._available_components: dict[str, tuple[type[Any], str, str, list[str], dict[str, Any]]] = {}
         self._version = _check_version()
         self._load_components()
 
@@ -691,7 +696,7 @@ class ElectronicsSource(ComponentSource):
                 metadata=class_metadata,
             )
 
-    def get_component(self, name: str, strict: bool = True, **params) -> ElectronicsComponent:
+    def get_component(self, name: str, strict: bool = True, **params: Any) -> ElectronicsComponent:
         """
         Get an electronics component by name.
 
@@ -811,7 +816,7 @@ class ElectronicsSource(ComponentSource):
             if spec.category == category:
                 yield spec
 
-    def get_param_schema(self, name: str) -> dict:
+    def get_param_schema(self, name: str) -> dict[str, Any]:
         """
         Get the parameter schema for a component.
 

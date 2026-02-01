@@ -5,6 +5,7 @@ cq_warehouse provides parametric fasteners, bearings, chains, etc.
 """
 
 from collections.abc import Iterator
+from typing import Any
 
 import cadquery as cq
 
@@ -26,7 +27,14 @@ FASTENER_CLASSES = {
 class WarehouseFastener(Component):
     """Component backed by cq_warehouse fastener."""
 
-    def __init__(self, spec: ComponentSpec, fastener_class: type, fastener_type: str, size: str, length: float | None = None):
+    def __init__(
+        self,
+        spec: ComponentSpec,
+        fastener_class: type[Any],
+        fastener_type: str,
+        size: str,
+        length: float | None = None,
+    ) -> None:
         super().__init__(spec)
         self._fastener_class = fastener_class
         self._fastener_type = fastener_type
@@ -45,20 +53,25 @@ class WarehouseFastener(Component):
                 size=self._size,
                 fastener_type=self._fastener_type,
             )
-        return fastener.cq_object
+        return fastener.cq_object  # type: ignore[no-any-return]
 
 
 class WarehouseBearing(Component):
     """Component backed by cq_warehouse bearing."""
 
-    def __init__(self, spec: ComponentSpec, bearing_class: type, size: str):
+    def __init__(
+        self,
+        spec: ComponentSpec,
+        bearing_class: type[Any],
+        size: str,
+    ) -> None:
         super().__init__(spec)
         self._bearing_class = bearing_class
         self._size = size
 
     def build(self) -> cq.Workplane:
         bearing = self._bearing_class(size=self._size)
-        return bearing.cq_object
+        return bearing.cq_object  # type: ignore[no-any-return]
 
 
 class WarehouseSource(ComponentSource):
@@ -71,9 +84,9 @@ class WarehouseSource(ComponentSource):
     - Chains and sprockets
     """
 
-    def __init__(self):
-        self._fasteners = {}
-        self._bearings = {}
+    def __init__(self) -> None:
+        self._fasteners: dict[str, tuple[type[Any], str, str]] = {}
+        self._bearings: dict[str, type[Any]] = {}
         self._load_fasteners()
         self._load_bearings()
 
@@ -123,16 +136,18 @@ class WarehouseSource(ComponentSource):
         """List available sizes for a fastener type."""
         if fastener_type in self._fasteners:
             cls, _, _ = self._fasteners[fastener_type]
-            return cls.sizes(iso_type)
+            sizes: list[str] = cls.sizes(iso_type)
+            return sizes
         return []
 
     def list_bearing_sizes(self) -> list[str]:
         """List available bearing sizes."""
         if "SingleRowDeepGrooveBallBearing" in self._bearings:
-            return self._bearings["SingleRowDeepGrooveBallBearing"].sizes()
+            sizes: list[str] = self._bearings["SingleRowDeepGrooveBallBearing"].sizes()
+            return sizes
         return []
 
-    def get_component(self, name: str, **params) -> Component:
+    def get_component(self, name: str, **params: Any) -> Component:
         """
         Get a fastener or bearing component.
 

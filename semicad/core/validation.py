@@ -9,7 +9,7 @@ Provides validation checks for CadQuery geometry to catch issues early:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import cadquery as cq
@@ -28,7 +28,7 @@ class ValidationIssue:
     severity: IssueSeverity
     code: str
     message: str
-    details: dict = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -128,7 +128,7 @@ def validate_geometry(
 
     # Check 2: Count solids
     try:
-        solids = shape.Solids()
+        solids = shape.Solids()  # type: ignore[union-attr]
         solid_count = len(solids)
         if solid_count == 0:
             issues.append(ValidationIssue(
@@ -142,7 +142,7 @@ def validate_geometry(
 
     # Check 3: Count faces
     try:
-        faces = shape.Faces()
+        faces = shape.Faces()  # type: ignore[union-attr]
         face_count = len(faces)
         if face_count == 0 and solid_count > 0:
             issues.append(ValidationIssue(
@@ -164,7 +164,7 @@ def validate_geometry(
 
     # Check 5: Bounding box
     try:
-        bbox = shape.BoundingBox()
+        bbox = shape.BoundingBox()  # type: ignore[union-attr]
         bbox_size = (bbox.xlen, bbox.ylen, bbox.zlen)
 
         # Check for oversized dimensions
@@ -195,7 +195,7 @@ def validate_geometry(
 
     # Check 6: OCC shape validity
     try:
-        occ_shape = shape.wrapped
+        occ_shape = shape.wrapped  # type: ignore[union-attr]
         from OCC.Core.BRepCheck import BRepCheck_Analyzer
         analyzer = BRepCheck_Analyzer(occ_shape)
         if not analyzer.IsValid():

@@ -24,19 +24,17 @@ from .project import Project
 from .registry import CacheStats, ComponentRegistry
 
 __all__ = [
-    # Classes
     "CacheStats",
     "Component",
-    "ComponentRegistry",
-    "ComponentSpec",
-    "Project",
-    # Exceptions
     "ComponentBuildError",
     "ComponentError",
     "ComponentNotFoundError",
+    "ComponentRegistry",
+    "ComponentSpec",
     "ExportError",
     "ExportFormatError",
     "ParameterValidationError",
+    "Project",
     "ProjectConfigError",
     "ProjectError",
     "ProjectNotFoundError",

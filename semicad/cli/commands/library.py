@@ -6,7 +6,7 @@ import json
 
 import click
 
-from semicad.cli import verbose_echo
+from semicad.cli import get_ctx_value, verbose_echo
 
 
 @click.group()
@@ -27,7 +27,7 @@ def list_libs(ctx, source, category):
     verbose_echo(ctx, "Initializing component registry...")
     registry = get_registry()
     verbose_echo(ctx, f"Registry sources: {registry.sources}")
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     # Build data structure
     data = {"sources": {}}
@@ -76,7 +76,7 @@ def info(ctx, component):
     verbose_echo(ctx, "Initializing component registry...")
     registry = get_registry()
     verbose_echo(ctx, f"Registry sources: {registry.sources}")
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     try:
         # Use get_spec() to avoid requiring params for parametric components
@@ -121,7 +121,7 @@ def info(ctx, component):
     except KeyError:
         verbose_echo(ctx, "Component not found in any source")
         click.echo(f"Component not found: {component}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @lib.command("fasteners")
@@ -134,7 +134,7 @@ def fasteners(ctx, fastener_type):
     verbose_echo(ctx, "Initializing cq_warehouse source...")
     source = WarehouseSource()
     verbose_echo(ctx, f"Querying fastener sizes for: {fastener_type}")
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     sizes = source.list_fastener_sizes(fastener_type)
     verbose_echo(ctx, f"Found {len(sizes)} sizes")
@@ -167,7 +167,7 @@ def bearings(ctx):
     verbose_echo(ctx, "Initializing cq_warehouse source...")
     source = WarehouseSource()
     verbose_echo(ctx, "Querying bearing sizes...")
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     sizes = source.list_bearing_sizes()
     verbose_echo(ctx, f"Found {len(sizes)} bearing sizes")
@@ -198,7 +198,7 @@ def electronics(ctx):
     from semicad.sources.electronics import ElectronicsSource
 
     source = ElectronicsSource()
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     categories = source.list_categories()
 
@@ -249,7 +249,7 @@ def boards(ctx):
     from semicad.sources.electronics import ElectronicsSource
 
     source = ElectronicsSource()
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     board_list = source.list_boards()
 
@@ -304,7 +304,7 @@ def connectors(ctx):
     from semicad.sources.electronics import ElectronicsSource
 
     source = ElectronicsSource()
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     connector_list = source.list_connectors()
 
@@ -362,7 +362,7 @@ def search(ctx, query, source):
     verbose_echo(ctx, "Initializing component registry...")
     registry = get_registry()
     verbose_echo(ctx, f"Registry sources: {registry.sources}")
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     if source:
         verbose_echo(ctx, f"Filtering by source: {source}")
@@ -463,12 +463,12 @@ def validate(ctx, component, max_size, min_size, param):
     from semicad.core.registry import get_registry
     from semicad.core.validation import IssueSeverity
 
-    verbose = ctx.obj.get("verbose", False)
+    verbose = get_ctx_value(ctx, "verbose", False)
 
     verbose_echo(ctx, "Initializing component registry...")
     registry = get_registry()
     verbose_echo(ctx, f"Registry sources: {registry.sources}")
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     # Parse component parameters
     comp_params = parse_validate_param(param)
@@ -482,7 +482,7 @@ def validate(ctx, component, max_size, min_size, param):
     except KeyError:
         verbose_echo(ctx, "Component not found in any source")
         click.echo(f"Component not found: {component}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except ValueError as e:
         # Handle missing required parameters with helpful message
         click.echo(f"Parameter error: {e}", err=True)
@@ -495,7 +495,7 @@ def validate(ctx, component, max_size, min_size, param):
                 click.echo(f"  ./bin/dev lib validate {component} {example_params}")
         except KeyError:
             pass
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
     # Run validation
     verbose_echo(ctx, f"Running validation with max_size={max_size}, min_size={min_size}")

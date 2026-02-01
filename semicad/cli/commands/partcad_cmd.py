@@ -9,7 +9,7 @@ import json
 
 import click
 
-from semicad.cli import verbose_echo
+from semicad.cli import get_ctx_value, verbose_echo
 
 
 @click.group()
@@ -41,7 +41,7 @@ def search_parts(ctx, query, limit):
         partcad search "hex"
     """
     verbose_echo(ctx, f"Searching PartCAD for: {query}")
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     try:
         from semicad.sources.partcad_source import PartCADSource
@@ -82,11 +82,11 @@ def search_parts(ctx, query, limit):
 
     except ImportError as e:
         click.echo(f"PartCAD not available: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except Exception as e:
         verbose_echo(ctx, f"Error: {e}")
         click.echo(f"Search failed: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @partcad.command("list")
@@ -105,7 +105,7 @@ def list_parts(ctx, package, recursive):
         partcad list pub/std/metric               # List subpackages
     """
     verbose_echo(ctx, f"Listing PartCAD package: {package or '(root)'}")
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     try:
         from semicad.sources.partcad_source import PartCADSource, _normalize_path
@@ -140,11 +140,11 @@ def list_parts(ctx, package, recursive):
 
     except ImportError as e:
         click.echo(f"PartCAD not available: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except Exception as e:
         verbose_echo(ctx, f"Error: {e}")
         click.echo(f"List failed: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @partcad.command("info")
@@ -158,7 +158,7 @@ def part_info(ctx, path):
         partcad info "fastener/hexhead-iso4017"
     """
     verbose_echo(ctx, f"Getting info for: {path}")
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     try:
         from semicad.sources.partcad_source import PartCADSource
@@ -205,14 +205,14 @@ def part_info(ctx, path):
 
     except KeyError:
         click.echo(f"Part not found: {path}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except ImportError as e:
         click.echo(f"PartCAD not available: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except Exception as e:
         verbose_echo(ctx, f"Error: {e}")
         click.echo(f"Info failed: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @partcad.command("install")
@@ -229,7 +229,7 @@ def install_package(ctx, package):
         partcad install //pub/std/metric
     """
     verbose_echo(ctx, f"Installing package: {package}")
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     try:
         import partcad
@@ -275,11 +275,11 @@ def install_package(ctx, package):
 
     except ImportError as e:
         click.echo(f"PartCAD not available: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except Exception as e:
         verbose_echo(ctx, f"Error: {e}")
         click.echo(f"Install failed: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @partcad.command("render")
@@ -299,19 +299,20 @@ def render_part(ctx, path, output, fmt, size):
     verbose_echo(ctx, f"Rendering part: {path}")
 
     # Parse size parameters
-    params = {}
+    params: dict[str, str | int | float] = {}
     for s in size:
         if "=" in s:
             key, value = s.split("=", 1)
             # Try to convert to int/float if possible
+            parsed_value: str | int | float = value
             try:
-                value = int(value)
+                parsed_value = int(value)
             except ValueError:
                 try:
-                    value = float(value)
+                    parsed_value = float(value)
                 except ValueError:
-                    pass  # Keep as string
-            params[key] = value
+                    pass  # Keep as string - SIM105 doesn't apply here
+            params[key] = parsed_value
 
     try:
         import cadquery as cq
@@ -347,14 +348,14 @@ def render_part(ctx, path, output, fmt, size):
 
     except KeyError:
         click.echo(f"Part not found: {path}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except ImportError as e:
         click.echo(f"PartCAD not available: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except Exception as e:
         verbose_echo(ctx, f"Error: {e}")
         click.echo(f"Render failed: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 @partcad.command("sizes")
@@ -369,7 +370,7 @@ def show_sizes(ctx, path, param):
         partcad sizes //pub/std/metric/cqwarehouse:fastener/hexhead-iso4017 --param length
     """
     verbose_echo(ctx, f"Getting sizes for: {path}")
-    json_output = ctx.obj.get("json_output", False)
+    json_output = get_ctx_value(ctx, "json_output", False)
 
     try:
         from semicad.sources.partcad_source import PartCADSource
@@ -399,11 +400,11 @@ def show_sizes(ctx, path, param):
 
     except KeyError:
         click.echo(f"Part not found: {path}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except ImportError as e:
         click.echo(f"PartCAD not available: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except Exception as e:
         verbose_echo(ctx, f"Error: {e}")
         click.echo(f"Failed to get sizes: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

@@ -240,6 +240,7 @@ bpy.ops.render.render(write_still=True)
             capture_output=True,
             text=True,
             timeout=60,
+            check=False,
         )
         Path(script_path).unlink()
 
