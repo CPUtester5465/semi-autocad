@@ -12,12 +12,54 @@ Also exposes utility constants:
 - COLORS: RGB color values for rendering electronic components
 """
 
+import warnings
 from dataclasses import dataclass, field
 from typing import Iterator, Any
 import cadquery as cq
 
 from semicad.core.component import Component, ComponentSpec
 from semicad.core.registry import ComponentSource
+
+
+# Version compatibility (P2.12)
+MIN_CQ_ELECTRONICS_VERSION = "0.2.0"
+_cq_electronics_version: str | None = None
+
+
+def _check_version() -> str | None:
+    """Check cq_electronics version and warn if incompatible.
+
+    Returns the installed version or None if not installed.
+    """
+    global _cq_electronics_version
+    if _cq_electronics_version is not None:
+        return _cq_electronics_version
+
+    try:
+        import cq_electronics
+        version = getattr(cq_electronics, "__version__", None)
+        if version is None:
+            # Try importlib.metadata for packages without __version__
+            try:
+                from importlib.metadata import version as get_version
+                version = get_version("cq-electronics")
+            except Exception:
+                version = "unknown"
+
+        _cq_electronics_version = version
+
+        if version != "unknown":
+            from packaging.version import parse
+            if parse(version) < parse(MIN_CQ_ELECTRONICS_VERSION):
+                warnings.warn(
+                    f"cq_electronics {version} may not be compatible. "
+                    f"Minimum recommended: {MIN_CQ_ELECTRONICS_VERSION}",
+                    UserWarning,
+                    stacklevel=3
+                )
+        return version
+    except ImportError:
+        return None
 
 
 def _extract_class_constants(obj: Any) -> dict[str, Any]:
@@ -517,10 +559,15 @@ class ElectronicsSource(ComponentSource):
     - Connectors (PinHeader, JackSurfaceMount)
     - SMD components (BGA)
     - Mechanical parts (DinClip, TopHat/DIN rail)
+
+    Version compatibility:
+    - Minimum cq_electronics version: 0.2.0
+    - Tested with cadquery 2.5.x
     """
 
     def __init__(self):
         self._available_components: dict[str, tuple] = {}
+        self._version = _check_version()
         self._load_components()
 
     @property
@@ -601,7 +648,11 @@ class ElectronicsSource(ComponentSource):
             ParameterValidationError: If parameter validation fails
         """
         if name not in self._available_components:
-            raise KeyError(f"Component not found in cq_electronics: {name}")
+            version_info = f" (installed: {self._version})" if self._version else " (not installed)"
+            raise KeyError(
+                f"Component not found in cq_electronics: {name}{version_info}. "
+                f"Minimum version: {MIN_CQ_ELECTRONICS_VERSION}"
+            )
 
         cls, category, desc, required, defaults = self._available_components[name]
 

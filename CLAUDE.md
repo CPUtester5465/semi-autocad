@@ -163,4 +163,16 @@ Store design decisions and component relationships for cross-session continuity.
 | `scripts/components.py` | 16 drone components (motors, FC, ESC, batteries, props) |
 | `semicad/core/registry.py` | Component discovery and loading |
 | `semicad/sources/warehouse.py` | cq_warehouse adapter |
+| `semicad/sources/electronics.py` | cq_electronics adapter |
 | `projects/quadcopter-5inch/build.py` | Example build script with variants |
+
+## Dependency Version Compatibility
+
+| Dependency | Minimum Version | Notes |
+|------------|-----------------|-------|
+| Python | 3.10 | Required for type hints |
+| cadquery | 2.5.0 | Core CAD engine |
+| cq_electronics | 0.2.0 | Electronic components (RPi, connectors) |
+| cq_warehouse | - | Fasteners and bearings (no minimum) |
+
+The `ElectronicsSource` adapter checks cq_electronics version on initialization and warns if the installed version is below the minimum. Version info is included in error messages for debugging.

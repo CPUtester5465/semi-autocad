@@ -27,7 +27,8 @@ warehouse = [
     "cq-warehouse",
 ]
 electronics = [
-    "cq-electronics",
+    "cq-electronics>=0.2.0",
+    "packaging",  # For version checking
 ]
 partcad = [
     "partcad",
