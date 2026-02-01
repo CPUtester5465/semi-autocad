@@ -24,6 +24,7 @@ class ComponentSpec:
     category: str  # e.g., "fastener", "motor", "electronics"
     params: dict = field(default_factory=dict)
     description: str = ""
+    metadata: dict = field(default_factory=dict)  # Component metadata (dimensions, etc.)
 
     @property
     def full_name(self) -> str:
