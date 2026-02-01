@@ -8,6 +8,7 @@ cq_electronics provides electronic components like:
 - Mechanical (DIN rail, clips)
 """
 
+from dataclasses import dataclass, field
 from typing import Iterator, Any
 import cadquery as cq
 
@@ -28,6 +29,65 @@ def _extract_class_constants(obj: Any) -> dict[str, Any]:
             except Exception:
                 pass
     return metadata
+
+
+@dataclass
+class PartInfo:
+    """Information about a single part within an assembly."""
+
+    name: str
+    color: tuple[float, float, float, float] | None = None  # RGBA 0-1
+
+    @property
+    def color_hex(self) -> str | None:
+        """Return color as hex string (e.g., '#FF0000')."""
+        if self.color is None:
+            return None
+        r, g, b, _ = self.color
+        return f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+
+
+@dataclass
+class AssemblyInfo:
+    """
+    Metadata about an assembly structure.
+
+    Preserves part names, colors, and hierarchy that would otherwise
+    be lost when converting Assembly to Workplane.
+    """
+
+    parts: list[PartInfo] = field(default_factory=list)
+
+    @classmethod
+    def from_assembly(cls, asm: cq.Assembly) -> "AssemblyInfo":
+        """Extract metadata from a CadQuery Assembly."""
+        parts = []
+        for name, _ in asm.traverse():
+            # Find the child with this name to get its color
+            color_tuple = None
+            for child in asm.children:
+                if child.name == name:
+                    if child.color is not None:
+                        color_tuple = child.color.toTuple()
+                    break
+            parts.append(PartInfo(name=name, color=color_tuple))
+        return cls(parts=parts)
+
+    @property
+    def part_names(self) -> list[str]:
+        """List all part names in the assembly."""
+        return [p.name for p in self.parts]
+
+    def get_color(self, part_name: str) -> tuple[float, float, float, float] | None:
+        """Get the color for a specific part."""
+        for p in self.parts:
+            if p.name == part_name:
+                return p.color
+        return None
+
+    def get_color_map(self) -> dict[str, tuple[float, float, float, float]]:
+        """Return a mapping of part names to their colors."""
+        return {p.name: p.color for p in self.parts if p.color is not None}
 
 
 # Component catalog: maps short names to import info and metadata
@@ -98,13 +158,21 @@ COMPONENT_CATALOG = {
 
 
 class ElectronicsComponent(Component):
-    """Component backed by cq_electronics library."""
+    """
+    Component backed by cq_electronics library.
+
+    Preserves assembly structure when available. Access the original
+    assembly via the `assembly` property, or get assembly metadata
+    via `assembly_info`.
+    """
 
     def __init__(self, spec: ComponentSpec, component_class: type, params: dict):
         super().__init__(spec)
         self._component_class = component_class
         self._params = params
         self._instance: Any = None
+        self._assembly: cq.Assembly | None = None
+        self._assembly_info: AssemblyInfo | None = None
 
     def _ensure_instance(self) -> Any:
         """Ensure the cq_electronics instance exists, creating if needed."""
@@ -121,6 +189,9 @@ class ElectronicsComponent(Component):
 
         # Convert Assembly to Workplane if needed
         if isinstance(cq_obj, cq.Assembly):
+            # Preserve the original assembly and extract metadata
+            self._assembly = cq_obj
+            self._assembly_info = AssemblyInfo.from_assembly(cq_obj)
             compound = cq_obj.toCompound()
             return cq.Workplane("XY").add(compound)
         elif isinstance(cq_obj, cq.Workplane):
@@ -128,6 +199,8 @@ class ElectronicsComponent(Component):
         else:
             # Fallback: wrap in Workplane
             return cq.Workplane("XY").add(cq_obj)
+
+    # --- P2.3: Component metadata properties ---
 
     @property
     def raw_instance(self) -> Any:
@@ -203,6 +276,80 @@ class ElectronicsComponent(Component):
             return (float(width), float(height), float(depth) if depth else 0.0)
         return None
 
+    # --- P2.4: Assembly preservation properties ---
+
+    @property
+    def assembly(self) -> cq.Assembly | None:
+        """
+        Return the original cq.Assembly if the component was built from one.
+
+        This preserves part names, colors, and hierarchy that are lost
+        when converting to Workplane.
+
+        Returns None if the component is not assembly-based.
+        """
+        # Ensure build() has been called to populate _assembly
+        if self._geometry is None:
+            _ = self.geometry
+        return self._assembly
+
+    @property
+    def assembly_info(self) -> AssemblyInfo | None:
+        """
+        Return metadata about the assembly structure.
+
+        Provides access to part names and colors without needing
+        to work with the full Assembly object.
+        """
+        # Ensure build() has been called to populate _assembly_info
+        if self._geometry is None:
+            _ = self.geometry
+        return self._assembly_info
+
+    @property
+    def has_assembly(self) -> bool:
+        """Check if this component has an underlying assembly."""
+        return self.assembly is not None
+
+    def get_part(self, name: str) -> cq.Workplane | None:
+        """
+        Get a specific sub-part from the assembly by name.
+
+        Args:
+            name: The part name (e.g., 'rpi__ethernet_port')
+
+        Returns:
+            Workplane containing the part geometry, or None if not found.
+        """
+        if self.assembly is None:
+            return None
+
+        for child in self.assembly.children:
+            if child.name == name:
+                # child.obj is the actual shape
+                if isinstance(child.obj, cq.Workplane):
+                    return child.obj
+                else:
+                    return cq.Workplane("XY").add(child.obj)
+        return None
+
+    def get_color_map(self) -> dict[str, tuple[float, float, float, float]]:
+        """
+        Get a mapping of part names to their RGBA colors.
+
+        Returns:
+            Dict mapping part name to (r, g, b, a) tuple with values 0-1.
+        """
+        if self.assembly_info is None:
+            return {}
+        return self.assembly_info.get_color_map()
+
+    def list_parts(self) -> list[str]:
+        """List all part names in the assembly."""
+        if self.assembly_info is None:
+            return []
+        return self.assembly_info.part_names
+
 
 class ElectronicsSource(ComponentSource):
     """
@@ -256,15 +403,30 @@ class ElectronicsSource(ComponentSource):
                 metadata=class_metadata,
             )
 
-    def get_component(self, name: str, **params) -> Component:
+    def get_component(self, name: str, **params) -> ElectronicsComponent:
         """
         Get an electronics component by name.
 
+        The returned ElectronicsComponent preserves the original assembly
+        structure, allowing access to:
+        - Original cq.Assembly via `.assembly` property
+        - Part names via `.list_parts()`
+        - Part colors via `.get_color_map()`
+        - Individual sub-parts via `.get_part(name)`
+
         Examples:
-            get_component("RPi3b")
-            get_component("PinHeader", rows=2, columns=20)
-            get_component("BGA", length=10, width=10)
-            get_component("TopHat", length=100)
+            # Basic usage
+            rpi = get_component("RPi3b")
+            geometry = rpi.geometry  # Workplane (for positioning)
+
+            # Access assembly structure
+            if rpi.has_assembly:
+                print(rpi.list_parts())  # ['rpi__pcb_substrate', ...]
+                print(rpi.get_color_map())  # {'rpi__pcb_substrate': (0.85, ...)}
+                ethernet = rpi.get_part("rpi__ethernet_port")
+
+            # For colored STEP export, use .assembly directly
+            rpi.assembly.save("rpi.step")
         """
         if name not in self._available_components:
             raise KeyError(f"Component not found in cq_electronics: {name}")
