@@ -90,6 +90,132 @@ class AssemblyInfo:
         return {p.name: p.color for p in self.parts if p.color is not None}
 
 
+# Parameter schema definitions for validation
+# Format: {"param_name": {"type": type, "min": value, "max": value, "required": bool}}
+PARAM_SCHEMAS = {
+    "RPi3b": {
+        # No parameters
+    },
+    "PinHeader": {
+        "rows": {"type": int, "min": 1, "max": 100},
+        "columns": {"type": int, "min": 1, "max": 100},
+        "above": {"type": (int, float), "min": 0},
+        "below": {"type": (int, float), "min": 0},
+        "simple": {"type": bool},
+    },
+    "JackSurfaceMount": {
+        "length": {"type": (int, float), "min": 0.1},
+        "simple": {"type": bool},
+    },
+    "BGA": {
+        "length": {"type": (int, float), "min": 0.1, "required": True},
+        "width": {"type": (int, float), "min": 0.1, "required": True},
+        "height": {"type": (int, float), "min": 0.1},
+        "simple": {"type": bool},
+    },
+    "DinClip": {
+        # No parameters
+    },
+    "TopHat": {
+        "length": {"type": (int, float), "min": 0.1, "required": True},
+        "depth": {"type": (int, float), "min": 0.1},
+        "slots": {"type": bool},
+    },
+    "PiTrayClip": {
+        # No parameters
+    },
+}
+
+
+class ParameterValidationError(ValueError):
+    """Raised when parameter validation fails."""
+    pass
+
+
+def validate_params(component_name: str, params: dict, strict: bool = True) -> dict:
+    """
+    Validate parameters for a component and return filtered params.
+
+    Args:
+        component_name: Name of the component being validated
+        params: Parameters provided by the user
+        strict: If True, raise error on unknown params; if False, filter them out
+
+    Returns:
+        Validated and filtered parameters dict
+
+    Raises:
+        ParameterValidationError: When validation fails with clear error message
+    """
+    schema = PARAM_SCHEMAS.get(component_name, {})
+    validated_params = {}
+    errors = []
+
+    # Check for unknown parameters
+    known_params = set(schema.keys())
+    provided_params = set(params.keys())
+    unknown_params = provided_params - known_params
+
+    if unknown_params:
+        if strict:
+            errors.append(
+                f"Unknown parameter(s) for {component_name}: {sorted(unknown_params)}. "
+                f"Valid parameters: {sorted(known_params) if known_params else 'none'}"
+            )
+        # In non-strict mode, unknown params are simply filtered out
+
+    # Validate each provided parameter
+    for param_name, value in params.items():
+        if param_name in unknown_params:
+            continue  # Skip unknown params
+
+        param_schema = schema.get(param_name, {})
+        expected_type = param_schema.get("type")
+        min_val = param_schema.get("min")
+        max_val = param_schema.get("max")
+
+        # Type checking
+        if expected_type is not None:
+            # Handle tuple of types (e.g., (int, float))
+            if isinstance(expected_type, tuple):
+                if not isinstance(value, expected_type):
+                    type_names = " or ".join(t.__name__ for t in expected_type)
+                    errors.append(
+                        f"Parameter '{param_name}' must be {type_names}, "
+                        f"got {type(value).__name__} ({value!r})"
+                    )
+                    continue
+            else:
+                if not isinstance(value, expected_type):
+                    errors.append(
+                        f"Parameter '{param_name}' must be {expected_type.__name__}, "
+                        f"got {type(value).__name__} ({value!r})"
+                    )
+                    continue
+
+        # Range checking for numeric types
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if min_val is not None and value < min_val:
+                errors.append(
+                    f"Parameter '{param_name}' must be >= {min_val}, got {value}"
+                )
+                continue
+            if max_val is not None and value > max_val:
+                errors.append(
+                    f"Parameter '{param_name}' must be <= {max_val}, got {value}"
+                )
+                continue
+
+        validated_params[param_name] = value
+
+    if errors:
+        raise ParameterValidationError(
+            f"Invalid parameters for {component_name}:\n  - " + "\n  - ".join(errors)
+        )
+
+    return validated_params
+
+
 # Component catalog: maps short names to import info and metadata
 # Format: (module_path, class_name, category, description, required_params, default_params)
 COMPONENT_CATALOG = {
@@ -390,6 +516,9 @@ class ElectronicsSource(ComponentSource):
                 params_info["required"] = required
             if defaults:
                 params_info["defaults"] = defaults
+            # Include parameter schema for documentation
+            if name in PARAM_SCHEMAS and PARAM_SCHEMAS[name]:
+                params_info["schema"] = PARAM_SCHEMAS[name]
 
             # Extract class-level metadata (constants)
             class_metadata = _extract_class_constants(cls)
@@ -403,7 +532,7 @@ class ElectronicsSource(ComponentSource):
                 metadata=class_metadata,
             )
 
-    def get_component(self, name: str, **params) -> ElectronicsComponent:
+    def get_component(self, name: str, strict: bool = True, **params) -> ElectronicsComponent:
         """
         Get an electronics component by name.
 
@@ -413,6 +542,12 @@ class ElectronicsSource(ComponentSource):
         - Part names via `.list_parts()`
         - Part colors via `.get_color_map()`
         - Individual sub-parts via `.get_part(name)`
+
+        Args:
+            name: Component name (e.g., "PinHeader", "BGA")
+            strict: If True (default), raise error on unknown params.
+                    If False, unknown params are silently filtered out.
+            **params: Component parameters
 
         Examples:
             # Basic usage
@@ -427,25 +562,46 @@ class ElectronicsSource(ComponentSource):
 
             # For colored STEP export, use .assembly directly
             rpi.assembly.save("rpi.step")
+
+        Raises:
+            KeyError: If component not found
+            ValueError: If missing required parameters
+            ParameterValidationError: If parameter validation fails
         """
         if name not in self._available_components:
             raise KeyError(f"Component not found in cq_electronics: {name}")
 
         cls, category, desc, required, defaults = self._available_components[name]
 
-        # Check required parameters
+        # Check required parameters first (before validation)
         missing = [p for p in required if p not in params]
         if missing:
+            schema = PARAM_SCHEMAS.get(name, {})
+            schema_info = []
+            for p in required:
+                p_schema = schema.get(p, {})
+                p_type = p_schema.get("type")
+                if p_type:
+                    if isinstance(p_type, tuple):
+                        type_name = " or ".join(t.__name__ for t in p_type)
+                    else:
+                        type_name = p_type.__name__
+                    schema_info.append(f"{p}: {type_name}")
+                else:
+                    schema_info.append(p)
             raise ValueError(
                 f"Missing required parameters for {name}: {missing}. "
-                f"Required: {required}"
+                f"Required: [{', '.join(schema_info)}]"
             )
 
-        # Merge defaults with provided params
-        final_params = {**defaults, **params}
+        # Validate user-provided parameters
+        validated_params = validate_params(name, params, strict=strict)
 
-        # Build spec with final params
-        param_str = "_".join(f"{k}={v}" for k, v in sorted(params.items()) if v is not None)
+        # Merge defaults with validated params (validated params override defaults)
+        final_params = {**defaults, **validated_params}
+
+        # Build spec with validated params only (not defaults, for cleaner naming)
+        param_str = "_".join(f"{k}={v}" for k, v in sorted(validated_params.items()) if v is not None)
         instance_name = f"{name}_{param_str}" if param_str else name
 
         # Extract class-level metadata (constants)
@@ -474,3 +630,21 @@ class ElectronicsSource(ComponentSource):
         for spec in self.list_components():
             if spec.category == category:
                 yield spec
+
+    def get_param_schema(self, name: str) -> dict:
+        """
+        Get the parameter schema for a component.
+
+        Returns a dict mapping parameter names to their constraints:
+        - type: Expected type(s)
+        - min: Minimum value (for numeric types)
+        - max: Maximum value (for numeric types)
+        - required: Whether the parameter is required
+
+        Args:
+            name: Component name
+
+        Returns:
+            Parameter schema dict, or empty dict if no schema defined
+        """
+        return PARAM_SCHEMAS.get(name, {})

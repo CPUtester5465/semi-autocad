@@ -124,6 +124,7 @@ class ComponentRegistry:
         Raises:
             KeyError: If component not found in any source
             ValueError: If component found but missing required parameters
+            ParameterValidationError: If parameter validation fails
         """
         parts = full_name.split("/")
 
@@ -145,7 +146,12 @@ class ComponentRegistry:
                 # Component not in this source, try next
                 continue
             except ValueError as e:
-                # Component found but has parameter issues - save error
+                # Check if it's a parameter validation error - these should propagate immediately
+                # We check the class name to avoid importing the specific exception
+                if type(e).__name__ == "ParameterValidationError":
+                    raise
+                # Other ValueErrors (e.g., missing required params) indicate the
+                # component was found but params were wrong - save error
                 last_value_error = e
                 continue
 
